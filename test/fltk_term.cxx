@@ -674,7 +674,7 @@ void Fl_PTY_Terminal::command(const char *cmd_) {
 static int log_ = 0;
 static int no_splash = 0;
 static FILE *logfile = nullptr;
-static int set_term = 0;
+static int no_set_term = 0;
 static int history_lines = -1; // -1: Fl_Terminal default (100)
 static int columns = 80;
 static int rows = 25;
@@ -717,14 +717,14 @@ void parse_command_line(int argc, char *argv[]) {
                 "-g WxH ... geometry width x height chars\n"
                 "-h n ..... use n history lines\n"
                 "-s ....... don't show splash screen\n"
-                "-t ....... set TERM=xterm-256color\n");
+                "-t ....... don't set TERM=xterm-256color\n");
         exit(0);
       }
       if (argv[i][1] == 'D') {
         color = 0x10101000; // dark mode
       }
       test_arg(argv[i], 'l', log_);
-      test_arg(argv[i], 't', set_term);
+      test_arg(argv[i], 't', no_set_term);
       test_arg(argv[i], 's', no_splash);
       if (argv[i][1] == 'h') {
         if (i + 1 < argc) {
@@ -755,7 +755,7 @@ int main(int argc, char** argv) {
 #ifdef _WIN32
   Fl::lock();
 #else
-  if (set_term) {
+  if (!no_set_term) {
     setenv("TERM", "xterm-256color", 1);
   }
 #endif
