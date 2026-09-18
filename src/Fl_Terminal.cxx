@@ -3656,7 +3656,7 @@ void Fl_Terminal::append_utf8(const char *buf, int len/*=-1*/) {
         }
         break;
       }
-      if (clen == 1 && *p <= 0x80)          // route single ASCII
+      if (clen == 1 && (uchar)*p < 0x80)    // route single ASCII
         print_char(*p);                     // through the line_graphics handler
       else
         print_char(p, clen);                // write complete UTF-8 char to terminal
@@ -4468,8 +4468,7 @@ int Fl_Terminal::handle(int e) {
         char buf[40];
         int grow=0, gcol=0;
         bool gcr = false;
-        bool is_rowcol = (xy_to_glob_rowcol(Fl::event_x(), Fl::event_y(), grow, gcol, gcr) > 0)
-                   ? true : false;
+        xy_to_glob_rowcol(Fl::event_x(), Fl::event_y(), grow, gcol, gcr);
         snprintf(buf, sizeof(buf), "\033[<%d;%d;%d%c", (Fl::event_dy() > 0 ? 65 : 64), gcol+1, grow+1, 'M');
         send_pty(buf);
       }
