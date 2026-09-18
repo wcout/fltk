@@ -54,6 +54,7 @@ private:
   static void pty_read_callback(int fd_, void *data_);
 #else
   static DWORD WINAPI ChildReaderThread(LPVOID lpParam);
+  static VOID CALLBACK WaitCallback(PVOID lpParameter, BOOLEAN TimerOrWaitFired);
 #endif
   int handle_dnd(int event);
   int handle_paste(const std::string &text);
@@ -194,6 +195,14 @@ void Fl_PTY_Terminal::write_pty(const char *buf_, size_t len_) {
   }
 }
 
+#ifdef _WIN32
+/*static*/
+VOID CALLBACK Fl_PTY_Terminal::WaitCallback(PVOID lpParameter, BOOLEAN TimerOrWaitFired) {
+  Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)lpParameter;
+  term->input("");
+}
+#endif
+
 bool Fl_PTY_Terminal::init() {
   // Initialize backend
 #ifdef _WIN32
@@ -265,10 +274,8 @@ bool Fl_PTY_Terminal::init() {
     return false;
   }
 
-  RegisterWaitForSingleObject(&_hWaitHandle, pi.hProcess, [](PVOID lpParameter, BOOLEAN TimerOrWaitFired) -> VOID CALLBACK {
-    Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)lpParameter;
-    term->input("");
-  }, this, INFINITE, WT_EXECUTEONLYONCE);
+  RegisterWaitForSingleObject(&_hWaitHandle, pi.hProcess, WaitCallback, this, INFINITE, WT_EXECUTEONLYONCE);
+
   CloseHandle(pi.hProcess);
   CloseHandle(pi.hThread);
 
@@ -436,11 +443,11 @@ void Fl_PTY_Terminal::send_pty(const char *buf_) {
 int Fl_PTY_Terminal::handle_paste(const std::string &text) {
   if (text.size() && !alternate_buffer()) {
     if (bracketed_paste()) {
-      write_pty("\e[200~", 6);
+      write_pty("\x1b[200~", 6);
     }
     write_pty(text.c_str(), text.size());
     if (bracketed_paste()) {
-      write_pty("\e[201~", 6);
+      write_pty("\x1b[201~", 6);
     }
     return 1;
   }
@@ -664,7 +671,7 @@ void Fl_PTY_Terminal::command(const char *cmd_) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-static int log = 0;
+static int log_ = 0;
 static int no_splash = 0;
 static FILE *logfile = nullptr;
 static int set_term = 0;
@@ -716,7 +723,7 @@ void parse_command_line(int argc, char *argv[]) {
       if (argv[i][1] == 'D') {
         color = 0x10101000; // dark mode
       }
-      test_arg(argv[i], 'l', log);
+      test_arg(argv[i], 'l', log_);
       test_arg(argv[i], 't', set_term);
       test_arg(argv[i], 's', no_splash);
       if (argv[i][1] == 'h') {
@@ -760,7 +767,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Failed to initialize PTY backend\n");
     return 1;
   }
-  term.logging(log, logfile ? logfile : stderr);
+  term.logging(log_, logfile ? logfile : stderr);
   term.textsize(18);
   term.color(color);
   term.hscrollbar_style(Fl_Terminal::SCROLLBAR_OFF);
@@ -785,7 +792,7 @@ int main(int argc, char** argv) {
 
   term.callback([](Fl_Widget *wgt_, void *d_) {
     const char *buf = (const char *)d_;
-    if (log) {
+    if (log_) {
       Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)wgt_;
       int reason = Fl::callback_reason();
       fprintf(logfile ? logfile : stderr, "Fl_Terminal NOT IMPLEMENTED (%d): ", reason);
