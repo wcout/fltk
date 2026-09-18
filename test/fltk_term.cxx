@@ -88,7 +88,7 @@ private:
   HPCON _hPC = nullptr;
   HANDLE _hWaitHandle = NULL;
 public:
-  HANDLE readPipe() const	{
+  HANDLE readPipe() const {
     return _hPipeOutRead;
   }
 #endif
@@ -188,9 +188,7 @@ void Fl_PTY_Terminal::write_pty(const char *buf_, size_t len_) {
       WriteFile(_hPipeInWrite, buf_, (DWORD)len_, &bytes_written, nullptr);
     }
 #else
-    if (_pty_master_fd >= 0) {
-      ::write(_pty_master_fd, buf_, len_);
-    }
+    ::write(_pty_master_fd, buf_, len_);
 #endif
   }
 }
@@ -279,7 +277,7 @@ bool Fl_PTY_Terminal::init() {
   CloseHandle(pi.hProcess);
   CloseHandle(pi.hThread);
 
-  _pty_master_fd = _open_osfhandle((intptr_t)_hPipeOutRead, _O_RDONLY | _O_BINARY);
+  _pty_master_fd = 1; // dummy, for code unification
 
   // Spawn background reader thread
   CreateThread(NULL, 0, ChildReaderThread, this, 0, NULL);
@@ -339,7 +337,6 @@ bool Fl_PTY_Terminal::init() {
 
 void Fl_PTY_Terminal::quit() {
   append("\n--- shell process stopped ---\n");
-//	close(_pty_master_fd);
   window()->hide(); // shut down terminal
 }
 
