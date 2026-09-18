@@ -38,6 +38,7 @@
 #include <FL/fl_utf8.h> // fl_utf8len1
 #include <FL/fl_draw.H>
 #include <FL/fl_string_functions.h>
+#include <FL/fl_ask.H> // fl_beep
 
 /////////////////////////////////
 ////// Static Functions /////////
@@ -46,6 +47,9 @@
 #define MIN(a,b) ((a)<=(b)) ? (a) : (b)    // Return smaller of two values
 #define MAX(a,b) ((a)>=(b)) ? (a) : (b)    // Return larger of two values
 #define ABS(a)   ((a)<0) ? -(a) : (a)      // Return abs value
+
+static const Fl_Color DefaultFgColor = 0xd0d0d000; // off white
+static const Fl_Color NoColor = 0xffffffff;
 
 // Return val clamped between min and max
 static int clamp(int val, int min, int max)
@@ -97,8 +101,10 @@ Fl_Color Fl_Terminal::CharStyle::fltk_fg_color(uchar ci) {
     0x00d0d000,       // 6 - cyn
     0xd0d0d000        // 7 - white
   };
-  if (ci==39) return defaultfgcolor_;   // special case for 'reset' color
-  if (ci==49) return defaultbgcolor_;   // special case for 'reset' color
+// NOTE: dead code???
+//  if (ci==39 || ci==49) ::printf("fltk_fg_color(%d)\n", ci);
+//  if (ci==39) return defaultfgcolor_;   // special case for 'reset' color
+//  if (ci==49) return defaultbgcolor_;   // special case for 'reset' color
   ci &= 0x07;         // clamp to array size
   return xterm_fg_colors_[ci];
 }
@@ -119,10 +125,23 @@ Fl_Color Fl_Terminal::CharStyle::fltk_bg_color(uchar ci) {
     0x00c0c000,       // 6 - cyn
     0xc0c0c000        // 7 - white
   };
-  if (ci==39) return defaultfgcolor_;   // special case for 'reset' color
-  if (ci==49) return defaultbgcolor_;   // special case for 'reset' color
+// NOTE: dead code???
+//  if (ci==39 || ci==49) ::printf("fltk_bg_color(%d)\n", ci);
+//  if (ci==39) defaultfgcolor_;   // special case for 'reset' color
+//  if (ci==49) return defaultbgcolor_;   // special case for 'reset' color
   ci &= 0x07;         // clamp to array size
   return xterm_bg_colors_[ci];
+}
+
+/*
+  Reset the style to default e.g. via ESC[0m
+*/
+void Fl_Terminal::CharStyle::sgr_reset(void) {
+  attrib(Fl_Terminal::NORMAL);
+  if (charflags() & FG_XTERM) fgcolor_xterm(NoColor);
+  else                        fgcolor(NoColor);
+  if (charflags() & BG_XTERM) bgcolor_xterm(defaultbgcolor_);
+  else                        bgcolor(defaultbgcolor_);
 }
 
 // See if an Fl_Boxtype is FL_XXX_FRAME
@@ -293,7 +312,8 @@ int Fl_Terminal::EscapeSeq::append_val(void) {
     { vals_[vali_] = 0; return success; }          // zero in array, do not inc vali
   if (sscanf(valbuffp_, "%d", &vals_[vali_]) != 1) // Parse integer into vals_[]
     { return fail; }                               // fail if parsed a non-integer
-  vals_[vali_] &= 0x3ff;                           // sanity: enforce int in range 0 ~ 1023 (prevent DoS attack)
+  if (*(buff_+2) != '?')                           // except in [?xxx mode:
+     vals_[vali_] &= 0x3ff;                        // sanity: enforce int in range 0 ~ 1023 (prevent DoS attack)
   if (++vali_ >= maxvals)                          // advance val index, fail if too many vals
     { vali_ = maxvals-1; return fail; }            // clamp + fail
   valbuffp_ = 0;                                   // parsed val ok, reset valbuffp to NULL
@@ -399,12 +419,25 @@ int Fl_Terminal::EscapeSeq::parse(char c) {
     esc_mode(0x1b);
     if (append_buff(c) < 0) goto pfail;     // save ESC in buf
     return success;
+  } else if (esc_mode() == ']' && c == '\007') {
+    return completed;                       // in OSC mode \007 is the end marker
   } else if (c < ' ' || c >= 0x7f) {        // any other control or binary characters?
     goto pfail;                             // reset + fail out of esc sequence parsing
   }
   // Whatever the character is, handle it depending on esc_mode..
   if (esc_mode() == 0x1b) {                 // in ESC mode?
-    if (c == '[') {                         // <ESC>[? CSI (Ctrl Seq Introducer)
+    if (c == '\\') return completed;        // ESC\ (end marker ST)
+    if (c == '=') return completed;         // ESC= DECKPAM on
+    if (c == '>') return completed;         // ESC> DECKPAM off
+    if (c == '7' || c == '8') {             // handle <ESC>7 <ESC>8
+      c = (c == '7' ? 's' : 'u');           // as <ESC>[s <ESC>[u (save/restore cursor)
+    }
+    if (c == ']') {                         // <ESC>] OSC sequence?
+      esc_mode(c);
+      csi_      = false;
+      if (append_buff(c) < 0) goto pfail;   // save ']' in buf
+      return success;                       // success
+    } else if (c == '[') {                  // <ESC>[? CSI (Ctrl Seq Introducer)
       esc_mode(c);                          // switch to parsing mode for ESC[#;#;#..
       csi_      = true;                     // this is now a CSI sequence
       vali_     = 0;                        // zero vals_[] index
@@ -419,10 +452,35 @@ int Fl_Terminal::EscapeSeq::parse(char c) {
       valbuffp_ = 0;                        // valbuffp NULL (no vals yet)
       if (append_buff(c) < 0) goto pfail;   // save op in buf
       return completed;                     // completed sequence
-    } else {                                // ESCx?
+    } else if (c == '(' || c == ')') {      // ESCx?
+      esc_mode(c);
+      csi_     = false;
+      vali_    = 0;
+      valbuffp_ = 0;
+      if (append_buff(c) < 0) goto pfail;   // save op in buf
+      return success;
+    } else {
       goto pfail;                           // not supported
     }
+  } else if (esc_mode() == ']') {           // OSC mode?
+//    if (c == '\007') {                    // NOTE: completion is handled above
+//      return completed;                   // because otherwise filtered away!
+//    }
+    if (append_buff(c) < 0) goto pfail;
+    return success;
   } else if (esc_mode() == '[') {           // '[' mode? e.g. ESC[... aka. is_csi()
+    if (c == ' ' &&
+        ((buffp_ == buff_ + 2) ||
+        (buffp_ == buff_ + 3)))             // ignore SP in ESC[5 SP q and also in ESC[ SP q
+      return success;
+    if ((c == '!' || c == '?' || c == '<') && buffp_ == buff_ + 2) { // '<' is from mouse ESC[<...M/m mouse report
+      if (append_buff(c) < 0) goto pfail;   // '!' ESC[! commands (like ESC[!p soft reset)
+      return success;
+    }
+    else if (c == '>' && buffp_ == buff_ + 2) {
+      if (append_buff(c) < 0) goto pfail;
+      return success;
+    }
     if (c == ';') {                         // ';' indicates end of a value, e.g. ESC[0;2..
       if (append_val()   < 0) goto pfail;   // append value parsed so far, vali gets inc'ed
       if (append_buff(c) < 0) goto pfail;   // save ';' in buf
@@ -435,7 +493,10 @@ int Fl_Terminal::EscapeSeq::parse(char c) {
       return success;
     }
     // Not a ; or digit? fall thru to [A-Z,a-z] check
-  } else {                                  // all other esc_mode() chars are fail/unknown
+  } else if (esc_mode() == '(' || esc_mode() == ')') {
+      if (append_buff(c) < 0) goto pfail;
+      return completed;
+    } else {                                // all other esc_mode() chars are fail/unknown
     goto pfail;
   }
   if (( c >= '@' && c<= 'Z') ||             // ESC#X or ESC[...X, where X is [A-Z,a-z]?
@@ -462,12 +523,13 @@ pfail:
 Fl_Terminal::CharStyle::CharStyle(bool fontsize_defer) {
   attrib_           = 0;
   charflags_        = (FG_XTERM | BG_XTERM);
-  defaultfgcolor_   = 0xd0d0d000;   // off white
-  defaultbgcolor_   = 0xffffffff;   // special color: doesn't draw, 'shows thru' to box()
+  defaultfgcolor_   = DefaultFgColor;
+  defaultbgcolor_   = NoColor;   // special color: doesn't draw, 'shows thru' to box()
   fgcolor_          = defaultfgcolor_;
   bgcolor_          = defaultbgcolor_;
   fontface_         = FL_COURIER;
   fontsize_         = 14;
+  color_            = 0x00000000;
   if (!fontsize_defer) update();       // normal behavior
   else                 update_fake();  // use fake values instead
 }
@@ -508,13 +570,13 @@ uchar Fl_Terminal::CharStyle::colorbits_only(uchar inflags) const {
   return (inflags & ~COLORMASK) | (charflags_ & COLORMASK);   // add color bits only
 }
 
-void Fl_Terminal::CharStyle::fgcolor_xterm(uchar val) {
-  fgcolor_ = fltk_fg_color(val);
+void Fl_Terminal::CharStyle::fgcolor_xterm(uchar val, bool bright/* = false*/) {
+  fgcolor_ = bright ? bold_color(fltk_fg_color(val)) : fltk_fg_color(val);
   set_charflag(FG_XTERM);
 }
 
-void Fl_Terminal::CharStyle::bgcolor_xterm(uchar val) {
-  bgcolor_ = fltk_bg_color(val);
+void Fl_Terminal::CharStyle::bgcolor_xterm(uchar val, bool bright/* = false*/) {
+  bgcolor_ = bright ? bold_color(fltk_bg_color(val)) : fltk_bg_color(val);
   set_charflag(BG_XTERM);
 }
 
@@ -542,8 +604,8 @@ Fl_Terminal::Utf8Char::Utf8Char(void) {
   len_       = 1;
   attrib_    = 0;
   charflags_ = 0;
-  fgcolor_   = 0xffffff00;
-  bgcolor_   = 0xffffffff;   // special color: doesn't draw, 'shows thru' to box()
+  fgcolor_   = NoColor;
+  bgcolor_   = NoColor;   // special color: doesn't draw, 'shows thru' to box()
 }
 
 // copy ctor
@@ -654,7 +716,7 @@ int Fl_Terminal::Utf8Char::pwidth_int(void) const {
 //
 Fl_Color Fl_Terminal::Utf8Char::attr_color_(Fl_Color col, const Fl_Widget *grp) const {
   // Don't modify color if it's the special 'see thru' color 0xffffffff or widget's color()
-  if (grp && ((col == 0xffffffff) || (col == grp->color()))) return grp->color();
+  if (grp && ((col == NoColor) || (col == grp->color()))) return grp->color();
   switch (attrib_ & (Fl_Terminal::BOLD|Fl_Terminal::DIM)) {
     case 0: return col;                                   // not bold or dim? no change
     case Fl_Terminal::BOLD: return bold_color(col);       // bold? use bold_color()
@@ -667,19 +729,21 @@ Fl_Color Fl_Terminal::Utf8Char::attr_color_(Fl_Color col, const Fl_Widget *grp) 
 //    If a \p grp widget is specified (i.e. not NULL), don't let the color \p col be
 //    influenced by the attribute bits /if/ \p col matches the \p grp widget's own color().
 //
-Fl_Color Fl_Terminal::Utf8Char::attr_fg_color(const Fl_Widget *grp) const {
-  if (grp && (fgcolor_ == 0xffffffff))           // see thru color?
-    { return grp->color(); }                     // return grp's color()
+Fl_Color Fl_Terminal::Utf8Char::attr_fg_color(Fl_Color defaultfgcolor) const {
+  //DEBUG ::printf("fgcolor_ = 0x%x\n", fgcolor_);
+  Fl_Color c = fgcolor_ == NoColor ?             // see thru color?
+    defaultfgcolor : fgcolor_;                   // return default color
   return (charflags_ & Fl_Terminal::FG_XTERM)    // fg is an xterm color?
-           ? attr_color_(fgcolor(), grp)         // ..use attributes
-           : fgcolor();                          // ..ignore attributes.
+           ? attr_color_(c, nullptr)             // ..use attributes
+           : c;                                  // ..ignore attributes.
 }
 
 Fl_Color Fl_Terminal::Utf8Char::attr_bg_color(const Fl_Widget *grp) const {
-  if (grp && (bgcolor_ == 0xffffffff))           // see thru color?
+  if (grp && (bgcolor_ == NoColor))              // see thru color?
     { return grp->color(); }                     // return grp's color()
   return (charflags_ & Fl_Terminal::BG_XTERM)    // bg is an xterm color?
-           ? attr_color_(bgcolor(), grp)         // ..use attributes
+//           ? attr_color_(bgcolor(), grp)         // ..use attributes <- SEEMS WRONG
+           ? bgcolor()                           // ..ignore attributes (at least bold, what about dim?)
            : bgcolor();                          // ..ignore attributes.
 }
 
@@ -728,15 +792,15 @@ void Fl_Terminal::RingBuffer::offset_adjust(int rows) {
 //                |_____________|  └─> | Line 5      |   |
 //                                     |_____________|  _v_
 //
-void Fl_Terminal::RingBuffer::new_copy(int drows, int dcols, int hrows, const CharStyle& style) {
+std::vector<Fl_Terminal::Utf8Char> Fl_Terminal::RingBuffer::new_copy(int drows, int dcols, int hrows, const CharStyle& style) {
   (void)style;                                              // currently unused - need parameterized ctor (†)
   // Create new buffer
   int addhist       = disp_rows() - drows;                  // adjust history use
   int new_ring_rows = (drows+hrows);
   int new_hist_use  = clamp(hist_use_ + addhist, 0, hrows); // clamp in case new_hist_rows smaller than old
   int new_nchars    = (new_ring_rows * dcols);
-  Utf8Char *new_ring_chars = new Utf8Char[new_nchars];      // Create new ring buffer (†)
   // Preserve old contents in new buffer
+  std::vector<Utf8Char> new_ring_chars(new_nchars);         // Create empty ring buffer of new size
   int dst_cols      = dcols;
   int src_stop_row  = hist_use_srow();
   int tcols         = MIN(ring_cols(), dcols);
@@ -745,14 +809,14 @@ void Fl_Terminal::RingBuffer::new_copy(int drows, int dcols, int hrows, const Ch
   // Copy rows: working up from bottom of disp, stop at top of hist
   while ((src_row >= src_stop_row) && (dst_row >= 0)) {
     Utf8Char *src = u8c_ring_row(src_row);
-    Utf8Char *dst = new_ring_chars + (dst_row*dst_cols);
+    Utf8Char *dst = &new_ring_chars[dst_row*dst_cols];
     for (int col=0; col<tcols; col++ ) *dst++ = *src++;
     --src_row;
     --dst_row;
   }
   // Install new buffer: dump old, install new, adjust internals
-  if (ring_chars_) delete[] ring_chars_;
-  ring_chars_ = new_ring_chars;
+  ring_chars_.clear();
+  ring_chars_.resize(new_ring_rows);
   ring_rows_  = new_ring_rows;
   ring_cols_  = dcols;
   nchars_     = new_nchars;
@@ -760,12 +824,14 @@ void Fl_Terminal::RingBuffer::new_copy(int drows, int dcols, int hrows, const Ch
   hist_use_   = new_hist_use;
   disp_rows_  = drows;
   offset_     = 0;        // for new buffer, we used a zero offset
+  scroll_top_ = 0;
+  scroll_bottom_ = 0;
+  return new_ring_chars;
 }
 
 // Clear the class, delete previous ring if any
 void Fl_Terminal::RingBuffer::clear(void) {
-  if (ring_chars_) delete[] ring_chars_; // dump our ring
-  ring_chars_ = 0;
+  ring_chars_.clear();
   ring_rows_  = 0;
   ring_cols_  = 0;
   nchars_     = 0;
@@ -773,6 +839,8 @@ void Fl_Terminal::RingBuffer::clear(void) {
   hist_use_   = 0;
   disp_rows_  = 0;
   offset_     = 0;
+  scroll_top_ = 0;
+  scroll_bottom_ = 0;
 }
 
 // Clear history
@@ -782,14 +850,14 @@ void Fl_Terminal::RingBuffer::clear_hist(void) {
 
 // Default ctor
 Fl_Terminal::RingBuffer::RingBuffer(void) {
-  ring_chars_ = 0;
+  ring_chars_.clear();
   clear();
 }
 
 // Ctor with specific sizes
 Fl_Terminal::RingBuffer::RingBuffer(int drows, int dcols, int hrows) {
   // Start with cleared buffer first..
-  ring_chars_ = 0;
+  ring_chars_.clear();
   clear();
   // ..then create.
   create(drows, dcols, hrows);
@@ -797,8 +865,7 @@ Fl_Terminal::RingBuffer::RingBuffer(int drows, int dcols, int hrows) {
 
 // Dtor
 Fl_Terminal::RingBuffer::~RingBuffer(void) {
-  if (ring_chars_) delete[] ring_chars_;
-  ring_chars_ = NULL;
+  ring_chars_.clear();
 }
 
 // See if 'grow' is within the history buffer
@@ -847,6 +914,36 @@ void Fl_Terminal::RingBuffer::clear_disp_rows(int sdrow, int edrow, const CharSt
 //   > Negative rows scroll "down", clears top line(s), history unaffected
 //
 void Fl_Terminal::RingBuffer::scroll(int rows, const CharStyle& style) {
+  //DEBUG ::printf("   ring::scroll(%d) top=%d bottom=%d\n", rows, scroll_top_, scroll_bottom_);
+  int s = scroll_top_ ? scroll_top_ : 1;
+  int e = scroll_bottom_ ? scroll_bottom_ : disp_rows();
+  if (s != 1 || e != disp_rows()) {
+    if (rows > 0) {
+      rows = clamp(rows, 1, e - s + 1);   // sanity
+      //DEBUG ::printf("   scroll up %d, [%d/%d]\n", rows, s, e);
+      for (int i = 0; i < rows; i++) {
+        // scroll up, move lines from s + 1 till e up one line
+        for (int r = s + 1; r <= e; r++) {
+          move_disp_row(r - 1, r - 2);
+        }
+        /// clear last line (e) of scroll region
+        clear_disp_rows(e - 1, e - 1, style);
+      }
+    }
+    else if (rows < 0) {
+      rows = clamp(-rows, 1, e - s + 1);  // make rows positive + sane
+      //DEBUG ::printf("   scroll down %d, [%d/%d]\n", rows, s, e);
+      for (int i = 0; i < rows; i++) {
+        // scroll down, move lines from s till e - 1 down one line
+        for (int r = e - 1; r >= s; r--) {
+          move_disp_row(r - 1, r);
+        }
+        // clear first line (s) of scroll region
+        clear_disp_rows(s - 1, s - 1, style);
+      }
+    }
+    return;
+  }
   if (rows > 0) {
     // Scroll up into history
     //   Example: scroll(2):
@@ -1018,7 +1115,7 @@ void Fl_Terminal::RingBuffer::create(int drows, int dcols, int hrows) {
   ring_rows_  = hist_rows_ + disp_rows_;
   ring_cols_  = dcols;
   nchars_     = ring_rows_ * ring_cols_;
-  ring_chars_ = new Utf8Char[nchars_];
+  ring_chars_.resize(nchars_);
 }
 
 // Resize the buffer, preserve previous contents as much as possible
@@ -1030,7 +1127,7 @@ void Fl_Terminal::RingBuffer::resize(int drows, int dcols, int hrows, const Char
   // If rows or cols changed, make a NEW buffer and copy old contents.
   // New copy will have disp/hist_rows/cols and nchars adjusted.
   if (cols_changed || rows_changed) {             // rows or cols changed?
-    new_copy(drows, dcols, hrows, style);         // rebuild ring buffer, preserving contents
+    ring_chars_ = new_copy(drows, dcols, hrows, style);         // rebuild ring buffer, preserving contents
   } else {
     // Cols and total rows the same, probably just changed disp/hist ratio
     int addhist = disp_rows() - drows;            // adj hist_use smaller if disp enlarged
@@ -1724,12 +1821,14 @@ void Fl_Terminal::textcolor(Fl_Color val) {
   Otherwise, whatever specific background color was set for existing text
   will persist after changing color().
 
-  To see the effects of a change to color(), follow up with a call to redraw().
-
   The default value is 0x0.
 */
 void Fl_Terminal::color(Fl_Color val) {
   Fl_Group::color(val);
+  current_style_->color_ = Fl::get_color(val);
+  Fl_Color c = fl_contrast(current_style_->defaultfgcolor(), current_style_->color_);
+  textfgcolor_default(Fl::get_color(c));
+  redraw();
 }
 
 /**
@@ -2234,15 +2333,17 @@ void Fl_Terminal::scroll(int rows) {
   Lines deleted by scroll down are NOT moved into the scroll history.
 */
 void Fl_Terminal::insert_rows(int count) {
-  int dst_drow = disp_rows()-1;                                   // dst is bottom of display
-  int src_drow = clamp((dst_drow-count), 1, (disp_rows()-1));     // src is count lines up from dst
+  //DEBUG ::printf("insert_rows(%d) from cursor %d\n", count, cursor_.row());
+  int bottom = ring_.scroll_bottom() ? ring_.scroll_bottom() : disp_rows(); // scroll region?
+  int dst_drow = bottom - 1;                                      // dst is bottom of display
+  int src_drow = clamp((dst_drow - count), 1, dst_drow);          // src is count lines up from dst
   while (src_drow >= cursor_.row()) {                             // walk srcrow upwards to cursor row
     Utf8Char *src = u8c_disp_row(src_drow--);
     Utf8Char *dst = u8c_disp_row(dst_drow--);
     for (int dcol=0; dcol<disp_cols(); dcol++) *dst++ = *src++;   // move
   }
   // Blank remaining rows upwards to and including cursor line
-  while (dst_drow >= cursor_.row()) {                            // walk srcrow to curs line
+  while (dst_drow >= cursor_.row()) {                             // walk srcrow to curs line
     Utf8Char *dst = u8c_disp_row(dst_drow--);
     for (int dcol=0; dcol<disp_cols(); dcol++)
       dst++->clear(*current_style_);
@@ -2256,16 +2357,18 @@ void Fl_Terminal::insert_rows(int count) {
  Lines deleted by scroll up are NOT moved into the scroll history.
 */
 void Fl_Terminal::delete_rows(int count) {
-  int dst_drow = cursor_.row();                                   // dst is cursor row
-  int src_drow = clamp((dst_drow+count), 1, (disp_rows()-1));     // src is count rows below cursor
-  while (src_drow < disp_rows()) {                                // walk srcrow to EOD
+  //DEBUG ::printf("delete_rows(%d) from cursor %d\n", count, cursor_.row());
+  int dst_drow = cursor_.row();                              // dst is cursor row
+  int bottom = ring_.scroll_bottom() ? ring_.scroll_bottom() : disp_rows(); // scroll region?
+  int src_drow = clamp((dst_drow+count), 1, bottom - 1);     // src is count rows below cursor
+  while (src_drow < bottom) {                                // walk srcrow to EOD
     Utf8Char *src = u8c_disp_row(src_drow++);
     Utf8Char *dst = u8c_disp_row(dst_drow++);
     for (int dcol=0; dcol<disp_cols(); dcol++)
-      *dst++ = *src++;                                            // move
+      *dst++ = *src++;                                       // move
   }
   // Blank remaining rows downwards to End Of Display
-  while (dst_drow < disp_rows()) {                                // walk srcrow to EOD
+  while (dst_drow < bottom) {                                // walk srcrow to EOD
     Utf8Char *dst = u8c_disp_row(dst_drow++);
     for (int dcol=0; dcol<disp_cols(); dcol++)
       dst++->clear(*current_style_);
@@ -2350,6 +2453,23 @@ void Fl_Terminal::clear_history(void) {
   }
   // Adjust scrollbar (hist_use changed)
   update_scrollbar();
+}
+
+void Fl_Terminal::reset_modes(void) {
+  //DEBUG fprintf(stderr, "reset_modes (alternate_buffer_=%d)\n", alternate_buffer_);
+  if (alternate_buffer_) {
+    toggle_alternate_buffer(false);
+  }
+  line_graphics_ = false;
+  alternate_buffer_ = false;
+  DECCKM_ = false;
+  cursor_visible_ = true;
+  origin_mode_ = false;
+  autowrap_ = true;
+  mouse_mode_ = false;
+  sync_ = false;
+  cursor_state_ = true;
+  bracketed_paste_ = false;
 }
 
 /**
@@ -2442,7 +2562,10 @@ Fl_Color Fl_Terminal::cursorbgcolor(void) const { return cursor_.bgcolor(); }
   Move cursor to the specified row \p row.
   This value is clamped to the range (0..display_rows()-1).
 */
-void Fl_Terminal::cursor_row(int row) { cursor_.row( clamp(row,0,disp_rows()-1) ); }
+void Fl_Terminal::cursor_row(int row) {
+  if (origin_mode_) row += ring_.scroll_top();
+  cursor_.row( clamp(row,0,disp_rows()-1) );
+}
 /** Move cursor to the specified column \p col.
     This value is clamped to the range (0..display_columns()-1).
 */
@@ -2458,10 +2581,12 @@ int  Fl_Terminal::cursor_col(void) const { return cursor_.col(); }
   is false, or scrolls down if \p do_scroll is true.
 */
 void Fl_Terminal::cursor_up(int count, bool do_scroll) {
+  //DEBUG ::printf("Fl_Terminal::cursor_up(%d, %d)\n", count, do_scroll);
+  int top = ring_.scroll_top() ? ring_.scroll_top() - 1 : 0;
   count = clamp(count, 1, disp_rows() * 2);    // sanity (max 2 scrns)
   while (count-- > 0) {
-    if (cursor_.up() <= 0) {                   // hit screen top?
-      cursor_.row(0);                          // clamp cursor to top
+    if (cursor_.up() <= top) {                 // hit screen top?
+      cursor_.row(top);                        // clamp cursor to top
       if (do_scroll) scroll(-1);               // scrolling on? scroll down
       else           return;                   // scrolling off? stop at top
     }
@@ -2476,9 +2601,12 @@ void Fl_Terminal::cursor_up(int count, bool do_scroll) {
 void Fl_Terminal::cursor_down(int count,      ///< Number of lines to move cursor down
                               bool do_scroll  ///< Enable scrolling if set to true
                              ) {
+  //DEBUG ::printf("cursor_down(%d) scroll=%d\n", count, do_scroll);
   count = clamp(count, 1, ring_rows());        // sanity
+  int bottom = disp_rows();
+  if (ring_.scroll_bottom()) bottom -= (disp_rows() - ring_.scroll_bottom());
   while (count-- > 0) {
-    if (cursor_.down() >= disp_rows()) {       // hit screen bottom?
+    if (cursor_.down() >= bottom) {            // hit screen bottom?
       cursor_.row(disp_rows() - 1);            // clamp
       if (!do_scroll) break;                   // don't scroll? done
       scroll(1);                               // scroll up 1 row to make room for new line
@@ -2491,6 +2619,8 @@ void Fl_Terminal::cursor_down(int count,      ///< Number of lines to move curso
   if it hits screen edge.
 */
 void Fl_Terminal::cursor_left(int count) {
+  cursor_state_ = true;
+  start_cursor_blink();
   count = clamp(count, 1, disp_cols());        // sanity
   while (count-- > 0 )
     if (cursor_.left() < 0)                    // hit left edge of screen?
@@ -2503,8 +2633,9 @@ void Fl_Terminal::cursor_left(int count) {
   scrolls up one line if \p do_scroll is true.
 */
 void Fl_Terminal::cursor_right(int count, bool do_scroll) {
+  validate_cursor(do_scroll);
   while (count-- > 0) {
-    if (cursor_.right() >= disp_cols()) {      // hit right edge?
+    if (cursor_.right() > disp_cols()) {       // hit right edge?
       if (!do_scroll)                          // no scroll?
         { cursor_eol(); return; }              // stop at EOL, done
       else
@@ -2514,7 +2645,8 @@ void Fl_Terminal::cursor_right(int count, bool do_scroll) {
 }
 
 /** Move cursor to the home position (top/left). */
-void Fl_Terminal::cursor_home(void) { cursor_.col(0); cursor_.row(0); }
+//void Fl_Terminal::cursor_home(void) { cursor_.col(0); cursor_.row(0);}
+void Fl_Terminal::cursor_home(void) { cursor_.col(0); cursor_row(0);}
 
 /** Move cursor to the last column (at the far right) on the current line. */
 void Fl_Terminal::cursor_eol(void) { cursor_.col(disp_cols()-1); }
@@ -2571,13 +2703,64 @@ void Fl_Terminal::restore_cursor(void) {
     { cursor_.row(row); cursor_.col(col); }
 }
 
+void Fl_Terminal::on_cursor_blink(bool reset/*=false*/) {
+  static int count = 0;
+  if (reset) {
+    count = 18;
+    cursor_state_ = true;
+    return;
+  }
+  if (count) {
+    cursor_state_ = !cursor_state_;
+    count--;
+    display_modified();
+  }
+}
+
+/*static*/
+void Fl_Terminal::cursor_blink(void *d) {
+  Fl_Terminal *term = (Fl_Terminal *)d;
+  term->on_cursor_blink();
+  Fl::add_timeout(0.5, cursor_blink, d);
+}
+
+void Fl_Terminal::start_cursor_blink() {
+  stop_cursor_blink();
+  if (cursor_.style() % 2 && Fl::focus() == this) {
+    on_cursor_blink(true);
+    Fl::add_timeout(0.5, cursor_blink, this);
+  }
+}
+
+void Fl_Terminal::stop_cursor_blink() {
+  cursor_state_ = true;
+  Fl::remove_timeout(cursor_blink, this);
+}
+
+/// Set cursor style to value. Used by ESC [# q
+void Fl_Terminal::set_cursor_style(int style) {
+  //DEBUG fprintf(stderr, "set_cursor_style(%d)", style);
+  if (style < 1 || style > 6) style = 1;
+  stop_cursor_blink();
+  cursor_.style(style);
+  start_cursor_blink();
+}
+
+void Fl_Terminal::set_scroll_region(int top, int bottom) {
+  if (top > bottom) { top = 0; bottom = 0; } // "hack" to reset scrolling region (gnome term. does that)
+  ring_.scroll_top(top == 1 ? 0 : top);
+  ring_.scroll_bottom(bottom == disp_rows() ? 0 : bottom);
+  //DEBUG ::printf("scroll_top_: %d, scroll_bottom_: %d\n", top, bottom);
+}
+
 //////////////////////
 ////// PRINTING //////
 //////////////////////
 
 // Handle '\r' output based on output translation flags
 void Fl_Terminal::handle_cr(void) {
-  const bool do_scroll = true;
+//  const bool do_scroll = true;
+  const bool do_scroll = false;
   if (oflags_ & CR_TO_LF) cursor_down(1, do_scroll);
   else                    cursor_cr();
 }
@@ -2642,6 +2825,13 @@ void Fl_Terminal::handle_ctrl(char c) {
     case '\r': handle_cr();                return;  // CR?
     case '\n': handle_lf();                return;  // LF?
     case '\t': cursor_tab_right();         return;  // TAB?
+    case '\007':                                    // BELL
+      if (escseq.parse_in_progress()) {
+        handle_escseq(c);                           // end marker for OSC sequence?
+      } else {
+        fl_beep();                                  // "real" BELL
+      }
+      return;
     case 0x1b: handle_esc();               return;  // ESC?
     default:                                        // Unknown ctrl char?
       if (ansi_) escseq.reset();
@@ -2690,6 +2880,7 @@ void Fl_Terminal::handle_SGR(void) {     // ESC[...m?
          }
          break;
       case 1: if (val == 2) { rgbmode++; continue; }    // '2'?
+              if (val == 5) { rgbmode = 5; continue; }  // '5': 256 color cube index
               goto not_implemented;                     // not '2'? unsupported
       case 2: r=clamp(val,0,255); ++rgbmode; continue;  // parse red value
       case 3: g=clamp(val,0,255); ++rgbmode; continue;  // parse grn value
@@ -2702,6 +2893,46 @@ void Fl_Terminal::handle_SGR(void) {     // ESC[...m?
         }
         rgbcode = rgbmode = 0;                          // done w/rgb mode parsing
         continue;                                       // continue loop to parse more vals
+      case 5:
+        if (val < 16) {                                 // Xterm standard colors
+           Fl_Color c;
+           unsigned char cr, cg, cb;
+           if (rgbcode == 38) {                         // use builtin fg table
+              c = current_style_->fltk_fg_color(val%8); // normal colors for index 0-7
+              if (val >= 8) c = bold_color(c);          // bright (bold) color for index 8-15
+              Fl::get_color(c, cr, cg, cb);
+           }
+           else if (rgbcode == 48) {                    // use builtin bg table
+              c = current_style_->fltk_bg_color(val%8); // normal colors for index 0-7
+              if (val >= 8) c = bold_color(c);          // bright (bold) colors for index 8-15
+              Fl::get_color(c, cr, cg, cb);
+           }
+           else {
+             Fl::get_color(val, cr, cg, cb);            // from FLTK standard palette
+           }
+           r = cr;
+           g = cg;
+           b = cb;
+        }
+        else if (val > 16 && val < 231) {
+          val -= 16;
+          int rl = val / 36;
+          int gl = (val % 36) / 6;
+          int gb = val % 6;
+          static const int intensity[] = {0, 95, 135, 175, 215, 255};
+          r = intensity[rl];
+          g = intensity[gl];
+          b = intensity[gb];
+        }
+        else if (val >= 232 && val <= 255) {            // grayscale intensity
+          int v = 8 + (val - 232) * 10;
+          r = g = b = v;
+        }
+        //DEBUG fprintf(stderr, "color cube %d color: %d/%d/%d\n", rgbcode, r, g, b);
+        if (rgbcode == 38) current_style_->fgcolor(r, g, b);
+        if (rgbcode == 48) current_style_->bgcolor(r, g, b);
+        rgbcode = rgbmode = 0;
+        continue;
     }
     if (val < 10) {                                     // Set attribute? (bold,underline..)
       switch (val) {
@@ -2732,12 +2963,17 @@ void Fl_Terminal::handle_SGR(void) {     // ESC[...m?
     } else if (val >= 30 && val <= 37) {                 // Set fg color?
       uchar uval = (val - 30);
       current_style_->fgcolor_xterm(uval);
+    } else if (val >= 90 && val <= 97) {                 // Set bright fg color?
+      uchar uval = (val - 90);
+      current_style_->fgcolor_xterm(uval, true);
     } else if (val == 39) {                              // ESC[39m -- "normal" fg color:
-      Fl_Color fg = current_style_->defaultfgcolor();    // ..get default color
-      current_style_->fgcolor_xterm(fg);                 // ..set current color
+      current_style_->fgcolor_xterm(NoColor);            // ..set current color
     } else if (val >= 40 && val <= 47) {                 // Set bg color?
       uchar uval = (val - 40);
       current_style_->bgcolor_xterm(uval);
+    } else if (val >= 100 && val <= 107) {               // Set bright bg color?
+      uchar uval = (val - 100);
+      current_style_->bgcolor_xterm(uval, true);
     } else if (val == 49) {                              // ESC[49m -- "normal" bg color:
       Fl_Color bg = current_style_->defaultbgcolor();    // ..get default bg color
       current_style_->bgcolor_xterm(bg);                 // ..set current bg color
@@ -2747,6 +2983,7 @@ void Fl_Terminal::handle_SGR(void) {     // ESC[...m?
   }
   if (!rgbmode) return;                                  // RGB sequence complete?
 not_implemented:
+  do_callback(this, (void *)escseq.buf().c_str(), (Fl_Callback_Reason)998);
   escseq.reset();
   handle_unknown_char();
   return;
@@ -2764,6 +3001,129 @@ not_implemented:
 */
 void Fl_Terminal::handle_DECRARA(void) {
   // TODO: MAYBE NEVER
+}
+
+/**
+  Handle the VT100 OSC sequence <tt>ESC ] cmd ; text BEL/ESC\<tt>
+*/
+bool Fl_Terminal::osc_command(const char *cmd) {
+  //DEBUG fprintf(stderr, "OSC command: %s\n", cmd);
+  int mode = atoi(cmd);
+  std::string c(cmd);
+  if (c.size() > 2 && c[1] == ';' && mode >= 0 && mode <= 7) {
+     // set window title/icon (we just set window title always)
+     if (window()) window()->copy_label(&c.c_str()[2]);
+     return true;
+  }
+  if (mode == 11 || mode == 12) {
+    // 11: background color, 12: cursor color
+    c.erase(0, 3);
+    if (c.find("rgb:") == 0 && c.size() == 12) {
+      // set background/cursor color: support for 'rgb:RR/GG/BB'
+      int r = std::stoul(c.substr(4).c_str(), nullptr, 16);
+      int g = std::stoul(c.substr(7).c_str(), nullptr, 16);
+      int b = std::stoul(c.substr(10).c_str(), nullptr, 16);
+      mode == 11 ? color(fl_rgb_color(r, g, b)) : cursor_.bgcolor(fl_rgb_color(r, g, b));
+      return true;
+    } else if (c.find("#") == 0 && c.size() == 7) {
+      // set background/cursor color: support for '#RRGGBB'
+      unsigned long bg = std::stoul(c.substr(1).c_str(), nullptr, 16);
+      bg <<= 8;
+      mode == 11 ? color(bg) : cursor_.bgcolor(bg);
+      return true;
+    } else if(c.find("?") == 0) {
+      // query current background/cursor color
+      uchar r, g, b;
+      Fl::get_color(mode == 11 ? current_style_->color_ : cursor_.bgcolor(), r, g, b);
+      char buf[40];
+      // answer in 16-bit notation (according to docs most commonly used)
+      snprintf(buf, sizeof(buf), "\033]%d;rgb:%04x/%04x/%04x\007", mode, (int)r*257, (int)g*257, (int)b*257);
+      send_pty(buf);
+      return true;
+    } else {
+    // set background/cursor color: unsupported format(colorname, #RGB, #rrr/ggg/bbb,...)
+    }
+  }
+  return false;
+}
+
+/**
+  Enter or leave the alternate buffer mode.
+
+  On entering, the current buffer, cursor and style
+  are saved, the history lines are set to 0.
+
+  On leaving, the buffer, cursor and style is
+  restored from the saved data and history lines restored.
+
+  If the screen was resized during alternate buffer
+  mode, the original buffer will be resized too.
+*/
+void Fl_Terminal::toggle_alternate_buffer(bool on) {
+  static RingBuffer saved_ring;
+  static CharStyle saved_char_style;
+  static Cursor saved_cursor;
+  if (on) {
+    // Switch to alternate buffer
+    //DEBUG fprintf(stderr, "Use alternate buffer\n");
+    alternate_buffer_ = true;
+    saved_ring = ring_;
+    saved_char_style = *current_style_;
+    saved_cursor = cursor_;
+    history_lines(0);
+  } else {
+    // Return from alternate buffer
+    //DEBUG fprintf(stderr, "Exit alternate buffer\n");
+    alternate_buffer_ = false;
+    ring_ = saved_ring;
+    *current_style_ = saved_char_style;
+    cursor_ = saved_cursor;
+    resize(x(), y(), w(), h());
+    // handle background color changed while in alterenate buffer
+    if (color() != current_style_->color_) {
+      color(color());
+    }
+  }
+}
+
+bool Fl_Terminal::handle_private_mode(int mode, int cmd) {
+  //DEBUG fprintf(stderr, "ESC[?%d%c\n", mode, cmd);
+  if (cmd != 'h' && cmd != 'l') return false;
+  bool onoff = cmd == 'h';
+  switch (mode) {
+    case 1:
+      //DEBUG fprintf(stderr, "DECCKM mode %s\n", (onoff ? "ON" : "OFF"));
+      DECCKM_ = onoff; break;
+    case 6:
+      //DEBUG fprintf(stderr, "origin mode %s\n", (onoff ? "ON" : "OFF"));
+      origin_mode_ = onoff; break;
+    case 7:
+      //DEBUG fprintf(stderr, "autowrap mode %s\n", (onoff ? "ON" : "OFF"));
+      autowrap_ = onoff; break; // TODO: IMPLEMENT (when inserting characters in a row)
+    case 12:
+      // blinking cursor
+      // NOTE: tested to be ignored by gnome terminal, it honors the '\e[# q'
+      //       style more.
+      break; // => so just accept, do nothing with it currently
+    case 25:
+      cursor_visible_ = onoff; break;
+    case 1006:
+      // support "modern" mouse mode only
+      mouse_mode_ = onoff; break;
+    case 1049:
+      // Handle ESC[?1049h/l
+      toggle_alternate_buffer(onoff); break;
+    case 2004:
+      // Handle ESC[?2004/l
+      bracketed_paste_ = onoff; break;
+    case 2026:
+      // synchronized output mode
+      //DEBUG fprintf(stderr, "synced mode %s\n", (onoff ? "ON" : "OFF"));
+      sync_ = onoff; break;
+    default:
+      return false;
+  }
+  return true;
 }
 
 /**
@@ -2797,7 +3157,29 @@ void Fl_Terminal::handle_escseq(char c) {
   const int& dw = disp_cols();
   const int& dh = disp_rows();
   if (escseq.is_csi()) {                         // Was this a CSI (ESC[..) sequence?
-    switch (mode) {
+    if (escseq.buf()[2] == '>') {
+       //DEBUG fprintf(stderr, "handle ESC[>x\n");
+       switch (mode) {
+         case 'c': // query terminal identity IMPLEMENT??
+           sync_ = false; // also resets sync mode!
+           break;
+         case 'm': break; // set keyboard modifications IMPLEMENT??
+         default: goto not_implemented;
+      }
+    } else if (escseq.buf()[2] == '?') {
+      // OSC private mode ESC[?val0;val1;...h/l
+      for (int i = 0; i < tot; i++) {
+        if (!handle_private_mode(escseq.val(i), mode)) {
+          char buf[40];
+          snprintf(buf, sizeof(buf), "\e[?%d%c", escseq.val(i), mode);
+          do_callback(this, (void *)buf, (Fl_Callback_Reason)997);
+        }
+      }
+      return;
+    } else if (escseq.buf()[2] == '<') {
+        goto not_implemented; // ignore artefact from ESC[< button;X;Y;M/m mouse report mode
+    }
+    else switch (mode) {
       case '@':                                  // <ESC>[#@ - (ICH) Insert blank Chars (default=1)
         insert_char(' ', escseq.defvalmax(1,dw));
         break;
@@ -2912,7 +3294,9 @@ cup:
         break;
       case 'a': goto not_implemented;  // TODO   // ESC[#a - (HPR) move cursor relative [columns] (default=[row,col+1])
       case 'b': goto not_implemented;  // TODO   // ESC[#b - (REP) repeat prev graphics char # times
-      case 'd': goto not_implemented;  // TODO   // ESC[#d - (VPA) line pos absolute [row]
+      case 'd':
+        cursor_.row(clamp(val0, 1, dw)-1);       // ESC[#d - (VPA) line pos absolute [row]
+        break;
       case 'e': goto not_implemented;  // TODO   // ESC[#e - line pos relative [rows]
       case 'f':                                  // <ESC>[#f - (CUP) cursor position (#'s 1 based)
         goto cup;                                //            (same as ESC[H)
@@ -2926,8 +3310,32 @@ cup:
       case 'm': handle_SGR();             break; // ESC[#m - set character attributes (SGR)
       case 's': save_cursor();            break; // ESC[s - save cur pos (xterm+gnome)
       case 'u': restore_cursor();         break; // ESC[u - restore cur pos (xterm+gnome)
-      case 'q': goto not_implemented;  // TODO?  // ESC[>#q set cursor style (block/line/blink..)
-      case 'r': goto not_implemented;  // TODO   // ESC[#;#r set scroll region top;bot (default=full window)
+      case 'p':
+        // This could be ESC[!p = soft reset (DECSTR)
+        // We just ignore it, because it normally comes together with hard reset
+        // (Without ignoring it "!p" will be displayed during a 'reset' command)
+        break;
+      case 'q': set_cursor_style(val0);   break; // ESC[>#q set cursor style (block/line/blink..)
+      case 'r':
+        switch (clamp(tot,0,2)) {
+          case 0:
+            val0 = 1;
+            val1 = display_rows();
+            val1 = 0;
+            break;
+          case 1:
+            val0 = clamp(val0,1,display_rows());
+            val1 = display_rows();
+            val1 = 0;
+            break;
+          case 2:
+            val0 = clamp(val0,1,display_rows());
+            val1 = clamp(val1,1,display_rows());
+            break;
+        }
+        set_scroll_region(val0, val1);
+        cursor_home();
+        break;
       case 't': handle_DECRARA();         break; // ESC[#..$t -- (DECRARA) Reverse attribs in Rect Area (row,col)
       default: goto not_implemented;
     }
@@ -2939,10 +3347,18 @@ cup:
       case 'E': cursor_crlf();             break;// <ESC>E - do a crlf
       case 'H': set_tabstop();             break;// <ESC>H - set a tabstop
       case 'M': cursor_up(1, true);        break;// <ESC>M - (RI) Reverse Index (up w/scroll)
-      case '7': goto not_implemented;            // <ESC>7 - Save cursor & attrs    // TODO
-      case '8': goto not_implemented;            // <ESC>8 - Restore cursor & attrs // TODO
+      case 's': save_cursor();             break;// <ESC>7 - save cur pos (xterm+gnome)
+      case 'u': restore_cursor();          break;// <ESC>8 - restore cur pos (xterm+gnome)
+      case '(': line_graphics_ = escseq.buf()[2] == '0'; break;
+      case ']': if (osc_command(&escseq.buf().c_str()[2])) break;
+      // ignore artefacts from ESC] parsing with ST end marker (ESC\)
+      case '\033':
+      case '\\': break;
+      case '=': break;
+      case '>': break;
       default:
 not_implemented:
+        do_callback(this, (void *)escseq.buf().c_str(), (Fl_Callback_Reason)999);
         escseq.reset();
         handle_unknown_char();
         return;
@@ -3089,6 +3505,17 @@ void Fl_Terminal::plot_char(char c, int drow, int dcol) {
   u8c->text_ascii(c, *current_style_);
 }
 
+void Fl_Terminal::validate_cursor(bool do_scroll) {
+  cursor_state_ = true;
+  start_cursor_blink();
+  if (cursor_.col() >= display_columns()) {
+    if (!do_scroll)                          // no scroll?
+      { cursor_eol(); }                      // put at EOL
+    else
+      { cursor_crlf(1); }                    // do scroll? crlf
+    }
+}
+
 /**
   Prints single UTF-8 char \p text of optional byte length \p len
   at current cursor position, and advances the cursor if the character
@@ -3118,6 +3545,7 @@ void Fl_Terminal::print_char(const char *text, int len/*=-1*/) {
   } else if (escseq.parse_in_progress()) {     // ESC sequence in progress?
     handle_escseq(*text);
   } else {                                     // Handle printable char..
+    validate_cursor(do_scroll);
     plot_char(text, len, cursor_row(), cursor_col());
     cursor_right(1, do_scroll);
   }
@@ -3139,6 +3567,25 @@ void Fl_Terminal::print_char(char c) {
   } else if (escseq.parse_in_progress()) {     // ESC sequence in progress?
     handle_escseq(c);
   } else {                                     // Handle printable char..
+    if (line_graphics_) {
+      if (c == 'a') return print_char("▒");
+      if (c == 'j') return print_char("┘");
+      if (c == 'k') return print_char("┐");
+      if (c == 'l') return print_char("┌");
+      if (c == 'm') return print_char("└");
+      if (c == 'n') return print_char("┼");
+      if (c == 'o') return print_char("⎺");
+      if (c == 'p') return print_char("⎻");
+      if (c == 'q') return print_char("─");
+      if (c == 'r') return print_char("⎼");
+      if (c == 's') return print_char("⎽");
+      if (c == 't') return print_char("├");
+      if (c == 'u') return print_char("┤");
+      if (c == 'v') return print_char("┴");
+      if (c == 'w') return print_char("┬");
+      if (c == 'x') return print_char("│");
+    }
+    validate_cursor(do_scroll);
     plot_char(c, cursor_row(), cursor_col());
     cursor_right(1, do_scroll);
     return;
@@ -3209,7 +3656,10 @@ void Fl_Terminal::append_utf8(const char *buf, int len/*=-1*/) {
         }
         break;
       }
-      print_char(p, clen);                  // write complete UTF-8 char to terminal
+      if (clen == 1 && *p <= 0x80)          // route single ASCII
+        print_char(*p);                     // through the line_graphics handler
+      else
+        print_char(p, clen);                // write complete UTF-8 char to terminal
       p   += clen;                          // advance to next char
       len -= clen;                          // adjust len
       mod |= 1;
@@ -3385,7 +3835,7 @@ void Fl_Terminal::autoscroll_timer_cb(void *udata) {
 //
 void Fl_Terminal::redraw_timer_cb2(void) {
   //DRAWDEBUG ::printf("--- UPDATE TICK %.02f\n", redraw_rate_); fflush(stdout);
-  if (redraw_modified_) {
+  if (redraw_modified_ && !sync_) {
     redraw();                                                // Timer triggered redraw
     redraw_modified_ = false;                                // acknowledge modified flag
     Fl::repeat_timeout(redraw_rate_, redraw_timer_cb, this); // restart timer
@@ -3418,7 +3868,7 @@ void Fl_Terminal::redraw_timer_cb(void *udata) {
 */
 Fl_Terminal::Fl_Terminal(int X,int Y,int W,int H,const char*L)
   : Fl_Group(X,Y,W,H,L),
-    select_(this)
+    select_(this), alternate_buffer_(false)
 {
   bool fontsize_defer = false;
   init_(X,Y,W,H,L,-1,-1,100,fontsize_defer);
@@ -3437,7 +3887,7 @@ Fl_Terminal::Fl_Terminal(int X,int Y,int W,int H,const char*L)
 */
 Fl_Terminal::Fl_Terminal(int X,int Y,int W,int H,const char*L,int rows,int cols,int hist)
   : Fl_Group(X,Y,W,H,L),
-    select_(this)
+    select_(this), alternate_buffer_(false)
 {
   bool fontsize_defer = true;
   init_(X,Y,W,H,L,rows,cols,hist,fontsize_defer);
@@ -3445,6 +3895,7 @@ Fl_Terminal::Fl_Terminal(int X,int Y,int W,int H,const char*L,int rows,int cols,
 
 // Private constructor method
 void Fl_Terminal::init_(int X,int Y,int W,int H,const char*L,int rows,int cols,int hist,bool fontsize_defer) {
+  reset_modes();
   error_char_ = "¿";
   scrollbar = hscrollbar = 0;           // avoid problems w/update_screen_xywh()
   // currently unused params
@@ -3512,6 +3963,7 @@ void Fl_Terminal::init_(int X,int Y,int W,int H,const char*L,int rows,int cols,i
 */
 Fl_Terminal::~Fl_Terminal(void) {
   // Note: RingBuffer class handles destroying itself
+  stop_cursor_blink();
   if (tabstops_)
     { free(tabstops_); tabstops_ = 0; }
   if (autoscroll_dir_)
@@ -3632,12 +4084,12 @@ void Fl_Terminal::draw_row_bg(int grow, int X, int Y) const {
     }
     pwidth = u8c->pwidth_int();
     bg_col = is_inside_selection(grow, gcol)              // text in mouse select?
-               ? select_.selectionbgcolor()               // ..use select bg color
+               ? fl_contrast(select_.selectionbgcolor(), current_style_->color_)               // ..use select bg color
                : (u8c->attrib() & Fl_Terminal::INVERSE)   // Inverse mode?
-                 ? u8c->attr_fg_color(this)               // ..use fg color for bg
+                 ? u8c->attr_fg_color(current_style_->defaultfgcolor())  // ..use fg color for bg
                  : u8c->attr_bg_color(this);              // ..use bg color for bg
     // Draw only if color != 0xffffffff ('see through' color) or widget's own color().
-    if (bg_col != 0xffffffff && bg_col != Fl_Group::color()) {
+    if (bg_col != NoColor && bg_col != Fl_Group::color()) {
       fl_color(bg_col);
       fl_rectf(X, bg_y, pwidth, bg_h);
     }
@@ -3677,34 +4129,49 @@ void Fl_Terminal::draw_row(int grow, int Y) const {
   for (int gcol=start_col; gcol<end_col; gcol++,u8c++) {  // walk the columns
     const int &dcol = gcol;                               // dcol and gcol are the same
     // Are we drawing the cursor? Only if inside display
-    is_cursor = inside_display ? cursor_.is_rowcol(drow-scrollval, dcol) : 0;
+    is_cursor = cursor_visible_ && cursor_state_ && inside_display ? cursor_.is_rowcol(drow-scrollval, dcol) : 0;
     // Attribute changed since last char?
     if (u8c->attrib() != lastattr) {
       u8c->fl_font_set(*current_style_);                  // pwidth_int() needs fl_font set
       lastattr = u8c->attrib();
     }
     int pwidth = u8c->pwidth_int();
-    // DRAW CURSOR BLOCK - TODO: support other cursor types?
+    // DRAW CURSOR according to cursor type
     if (is_cursor) {
       int cx = X;
       int cy = Y + current_style_->fontheight() - cursor_.h();
       int cw = pwidth;
       int ch = cursor_.h();
       fl_color(cursorbgcolor());
-      if (Fl::focus() == this) fl_rectf(cx, cy, cw, ch);
-      else                     fl_rect(cx, cy, cw, ch);
+      if (Fl::focus() == this) {
+        switch (cursor_.style()) {
+          case 0:
+          case 1:
+          default:
+            fl_rectf(cx, cy, cw, ch); break;                 // SOLID BLOCK
+          case 3:
+          case 4:
+            fl_rectf(cx, cy + ch - 1, cw, 1); break;         // UNDERSCORE
+          case 5:
+          case 6:
+            fl_rectf(cx, cy, 1, ch); break;                  // VERTICAL LINE
+        }
+
+      } else fl_rect(cx, cy, cw, ch);
     }
     // DRAW TEXT
     // 1) Color for text
-    if (is_cursor) fg = cursorfgcolor();                     // color for text under cursor
+    if (is_cursor && cursor_.style() <= 2) {                 // only for block cursor type:
+      fg = cursorfgcolor();                                  // color for text under cursor
+    }
     else fg = is_inside_selection(grow, gcol)                // text in mouse selection?
-      ? select_.selectionfgcolor()                           // ..use selection FG color
+      ? fl_contrast(select_.selectionfgcolor(), textfgcolor_default())                           // ..use selection FG color
       : (u8c->attrib() & Fl_Terminal::INVERSE)               // Inverse attrib?
         ? u8c->attr_bg_color(this)                           // ..use char's bg color for fg
-        : u8c->attr_fg_color(this);                          // ..use char's fg color for fg
+        : u8c->attr_fg_color(current_style_->defaultfgcolor());      // ..use char's fg color for fg
     fl_color(fg);
     // 2) Font for text - already set by u8c->fl_font_set() in the above
-    if (is_cursor) {
+    if (is_cursor && cursor_.style() <= 2) {      // only for block cursor type:
       fl_font(fl_font()|FL_BOLD, fl_size());      // force text under cursor BOLD
       lastattr = -1;                              // (ensure font reset on next iter)
     }
@@ -3865,6 +4332,13 @@ int Fl_Terminal::handle_selection(int e) {
   bool gcr = false;
   bool is_rowcol = (xy_to_glob_rowcol(Fl::event_x(), Fl::event_y(), grow, gcol, gcr) > 0)
                    ? true : false;
+  if (mouse_mode_/* && alternate_buffer_*/) {
+     char buf[40];
+     int button = clamp(Fl::event_button() - 1, 0, 2);
+     snprintf(buf, sizeof(buf), "\033[<%d;%d;%d%c", (e == FL_DRAG ? 32 + button : button), gcol+1, grow-disp_srow()+1, ((e == FL_PUSH || e == FL_DRAG) ? 'M' : 'm'));
+     send_pty(buf);
+    return 1;
+  }
   switch (e) {
     case FL_PUSH: {
       // SHIFT-LEFT-CLICK? Extend or start new
@@ -3936,6 +4410,7 @@ int Fl_Terminal::handle(int e) {
       return 1;
     case FL_UNFOCUS:
     case FL_FOCUS:
+      e == FL_FOCUS ? start_cursor_blink() : stop_cursor_blink();
       redraw();
       return Fl::visible_focus() ? 1 : 0;
     case FL_KEYBOARD:
@@ -3971,22 +4446,33 @@ int Fl_Terminal::handle(int e) {
       break;
     case FL_PUSH:
       if (handle(FL_FOCUS)) Fl::focus(this);              // Accepting focus? take it
-      if (Fl::event_button() == FL_LEFT_MOUSE)            // LEFT-CLICK?
+      if (Fl::event_button() == FL_LEFT_MOUSE || mouse_mode_)            // LEFT-CLICK?
         { ret = handle_selection(FL_PUSH); }
       break;
     case FL_DRAG:
       // TODO: This logic can probably be improved to allow an FL_PUSH in margins
       //       to drag into terminal area to start a selection.
-      if (Fl::event_button() == FL_LEFT_MOUSE)            // LEFT-DRAG?
+      if (Fl::event_button() == FL_LEFT_MOUSE || mouse_mode_)            // LEFT-DRAG?
         { ret = handle_selection(FL_DRAG); }
       break;
     case FL_RELEASE:
       // Selection mouse release?
-      if (Fl::event_button() == FL_LEFT_MOUSE)            // LEFT-RELEASE?
+      if (Fl::event_button() == FL_LEFT_MOUSE || mouse_mode_)            // LEFT-RELEASE?
         { ret = handle_selection(FL_RELEASE); }
       // Disable autoscroll timer, if any
       if (autoscroll_dir_)
         { Fl::remove_timeout(autoscroll_timer_cb, this); autoscroll_dir_ = 0; }
+      break;
+    case FL_MOUSEWHEEL:
+      if (mouse_mode_) {
+        char buf[40];
+        int grow=0, gcol=0;
+        bool gcr = false;
+        bool is_rowcol = (xy_to_glob_rowcol(Fl::event_x(), Fl::event_y(), grow, gcol, gcr) > 0)
+                   ? true : false;
+        snprintf(buf, sizeof(buf), "\033[<%d;%d;%d%c", (Fl::event_dy() > 0 ? 65 : 64), gcol+1, grow+1, 'M');
+        send_pty(buf);
+      }
       break;
   } // switch
   return ret;

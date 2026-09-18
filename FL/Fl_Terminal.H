@@ -31,6 +31,7 @@
 
 #include <stdarg.h>             // va_list (MinGW)
 #include <string>
+#include <vector>
 
 /** \class Fl_Terminal
 
@@ -438,11 +439,13 @@ protected:
     int         charwidth_;        // width of a fixed width ASCII character
   public:
     CharStyle(bool fontsize_defer);
+    CharStyle() {}                 // needed for alternate buffer handling
     uchar attrib(void) const            { return attrib_; }
     uchar charflags(void) const         { return charflags_; }
     // Colors - All access to colors are by Fl_Color only.
     //          There are three ways to SET colors: Fl_Color, rgb, xterm(uchar)
     //
+    Fl_Color color_;
     Fl_Color fltk_fg_color(uchar ci);
     Fl_Color fltk_bg_color(uchar ci);
     Fl_Color fgcolor(void) const;
@@ -467,8 +470,8 @@ protected:
     // Xterm colors
     void fgcolor_xterm(Fl_Color val)    { fgcolor_ = val;                        set_charflag(FG_XTERM); }
     void bgcolor_xterm(Fl_Color val)    { bgcolor_ = val;                        set_charflag(BG_XTERM); }
-    void fgcolor_xterm(uchar val);
-    void bgcolor_xterm(uchar val);
+    void fgcolor_xterm(uchar val, bool bright = false);
+    void bgcolor_xterm(uchar val, bool bright = false);
     //
     void defaultfgcolor(Fl_Color val)   { defaultfgcolor_ = val; }
     void defaultbgcolor(Fl_Color val)   { defaultbgcolor_ = val; }
@@ -477,13 +480,7 @@ protected:
     void update(void);
     void update_fake(void);
     // SGR MODES: Set Graphics Rendition
-    void sgr_reset(void) {                         // e.g. ESC[0m
-      attrib(Fl_Terminal::NORMAL);
-      if (charflags() & FG_XTERM) fgcolor_xterm(defaultfgcolor_);
-      else                        fgcolor(defaultfgcolor_);
-      if (charflags() & BG_XTERM) bgcolor_xterm(defaultbgcolor_);
-      else                        bgcolor(defaultbgcolor_);
-    }
+    void sgr_reset(void); // ESC[0m
     int  onoff(bool flag, Attrib a) const { return (flag ? (attrib_ | a) : (attrib_ & ~a)); }
     void sgr_bold(bool val)      { attrib_ = (uchar)onoff(val, Fl_Terminal::BOLD);      } // e.g. ESC[1m
     void sgr_dim(bool val)       { attrib_ = (uchar)onoff(val, Fl_Terminal::DIM);       } // e.g. ESC[2m
@@ -506,6 +503,7 @@ protected:
     int      h_;        // cursor's height (affected by font size)
     Fl_Color fgcolor_;  // cursor's fg color (color of text, if any)
     Fl_Color bgcolor_;  // cursor's bg color
+    int      style_;    // cursor's current style
   public:
     Cursor(void) {
       col_     = 0;
@@ -513,6 +511,7 @@ protected:
       h_       = 10;
       fgcolor_ = 0xfffff000;   // wht
       bgcolor_ = 0x00d00000;   // grn
+      style_   = 1;            // block blinking
     }
     int col(void) const          { return col_; }
     int row(void) const          { return row_; }
@@ -531,6 +530,8 @@ protected:
     bool is_rowcol(int drow,int dcol) const;
     void scroll(int nrows);
     void home(void) { row_ = 0; col_ = 0; }
+    void style(int s) { style_ = s; }
+    int style(void) const { return style_; }
   };
 
   // Utf8Char Class ///////////////////////////////////////////////////////////
@@ -578,7 +579,7 @@ protected:
     bool is_char(char c) const { return *text_ == c; }
     void show_char(void) const { ::printf("%.*s", len_, text_); }
     void show_char_info(void) const { ::fprintf(stderr, "UTF-8('%.*s', len=%d)\n", len_, text_, len_); }
-    Fl_Color attr_fg_color(const Fl_Widget *grp) const;
+    Fl_Color attr_fg_color(Fl_Color defaultfgcolor) const;
     Fl_Color attr_bg_color(const Fl_Widget *grp) const;
   };
 
@@ -587,7 +588,7 @@ protected:
   // Manages ring with indexed row/col and "history" vs. "display" concepts.
   //
   class FL_EXPORT RingBuffer {
-    Utf8Char *ring_chars_;    // the ring UTF-8 char buffer
+    std::vector<Utf8Char> ring_chars_;    // the ring UTF-8 char buffer
     int ring_rows_;           // #rows in ring total
     int ring_cols_;           // #columns in ring/hist/disp
     int nchars_;              // #chars in ring (ring_rows*ring_cols)
@@ -595,9 +596,11 @@ protected:
     int hist_use_;            // #rows in use by history
     int disp_rows_;           // #rows in display
     int offset_;              // index offset (used for 'scrolling')
+    int scroll_top_;          // top line of scrollregion [1-disp_rows_] 0=none
+    int scroll_bottom_;       // bottom line of scrollregion [1-disp_rows_] 0=none
 
 private:
-    void new_copy(int drows, int dcols, int hrows, const CharStyle& style);
+    std::vector<Utf8Char> new_copy(int drows, int dcols, int hrows, const CharStyle& style);
     //DEBUG    void write_row(FILE *fp, Utf8Char *u8c, int cols) const {
     //DEBUG      cols = (cols != 0) ? cols : ring_cols();
     //DEBUG      for ( int col=0; col<cols; col++, u8c++ ) {
@@ -648,16 +651,20 @@ private:
     inline int disp_srow(void) const { return((offset_ + hist_rows_) % ring_rows_); }
     inline int disp_erow(void) const { return((offset_ + hist_rows_ + disp_rows_ - 1) % ring_rows_); }
     inline int offset(void)    const { return offset_; }
+    inline int scroll_top(void) const { return scroll_top_; }
+    inline int scroll_bottom(void) const { return scroll_bottom_; }
     void offset_adjust(int rows);
     void hist_rows(int val) { hist_rows_ = val; }
     void disp_rows(int val) { disp_rows_ = val; }
+    void scroll_top(int val) {scroll_top_ = val; }
+    void scroll_bottom(int val) {scroll_bottom_ = val; }
 
     // History use
     inline int  hist_use(void) const        { return hist_use_; }
     inline void hist_use(int val)           { hist_use_ = val; }
     inline int  hist_use_srow(void) const   { return((offset_ + hist_rows_ - hist_use_) % ring_rows_); }
-    inline Utf8Char *ring_chars(void)       { return ring_chars_; }  // access ring buffer directly
-    inline Utf8Char *ring_chars(void) const { return ring_chars_; }  // access ring buffer directly
+    inline std::vector<Utf8Char> &ring_chars(void)       { return ring_chars_; }  // access ring buffer directly
+    inline const std::vector<Utf8Char> &ring_chars(void) const { return ring_chars_; }  // access ring buffer directly
 
     bool is_hist_ring_row(int grow) const;
     bool is_disp_ring_row(int grow) const;
@@ -738,7 +745,7 @@ private:
   public:
     // EscapeSeq Constants
     // Maximums
-    static const int maxbuff   = 80;  // character buffer
+    static const int maxbuff   = 256; // character buffer
     static const int maxvals   = 20;  // integer value buffer
     // Return codes
     static const int success   = 0;   // operation succeeded
@@ -771,6 +778,7 @@ private:
     int  parse(char c);
     void save_cursor(int row, int col);
     void restore_cursor(int &row, int &col);
+    std::string buf() const { return std::string(buff_, buffp_ - buff_); }
   };
 
   // Partial UTF-8 Buffer Class ////////////////////////////////////////////
@@ -871,6 +879,19 @@ private:
   bool           redraw_modified_;  // display modified; used by redraw_timer_cb() to rate limit redraws
   bool           redraw_timer_;     // if true, redraw timer is running
   PartialUtf8Buf pub_;              // handles Partial Utf8 Buffer (pub)
+  bool           line_graphics_;    // produce box drawing characters with j,k,l,m,n,q,x
+  bool           alternate_buffer_; // flags use of alternate buffer with ESC[?1024h/l
+  bool           DECCKM_;           // flags cursor key mode (default: false)
+  bool           cursor_visible_;   // flags cursor visible (default: true)
+  bool           origin_mode_;      // flags origin mode (default: false)
+  bool           autowrap_;         // flags cursor autowrap at end of line (default: true)
+  bool           mouse_mode_;       // flags report of mouse events (default: false)
+  bool           sync_;             // flags "synchronized output mode" (default: false)
+  bool           cursor_state_;     // flags in blinking mode: on/off state (default: true)
+  bool           bracketed_paste_;  // flags "bracketed paste mode" (default: false)
+protected:
+  bool           alternate_buffer() const  { return alternate_buffer_; }
+  bool           bracketed_paste() const  { return bracketed_paste_; }
 
 protected:
   // Ring buffer management
@@ -950,6 +971,7 @@ protected:
   void insert_char(char c, int rep);
   void delete_chars(int drow, int dcol, int rep);
   void delete_chars(int rep);
+  void reset_modes(void);
 public:
  // API: Terminal operations
   void clear(void);
@@ -983,6 +1005,12 @@ protected:
   void cursor_tab_left(int count=1);
   void save_cursor(void);
   void restore_cursor(void);
+  void on_cursor_blink(bool reset = false);
+  static void cursor_blink(void *d);
+  void set_cursor_style(int style);
+  void start_cursor_blink();
+  void stop_cursor_blink();
+  bool DECCKM() const { return DECCKM_; }
   // Output translation
 public:
   void output_translate(Fl_Terminal::OutFlags val);
@@ -991,6 +1019,11 @@ private:
   void handle_lf(void);
   void handle_cr(void);
   void handle_esc(void);
+  bool osc_command(const char *cmd_);
+  void set_scroll_region(int top, int bottom);
+  void toggle_alternate_buffer(bool on);
+  bool handle_private_mode(int mode, int cmd);
+  void validate_cursor(bool do_scroll);
   // Printing
   void handle_ctrl(char c);
   bool is_printable(char c);
@@ -1077,6 +1110,7 @@ protected:
 
   // API: Terminal features
 public:
+  virtual void send_pty(const char *buf) {}
   // API: Scrollbar
   int   scrollbar_size(void) const;
   void  scrollbar_size(int val);
