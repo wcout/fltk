@@ -188,7 +188,10 @@ void Fl_PTY_Terminal::write_pty(const char *buf_, size_t len_) {
       WriteFile(_hPipeInWrite, buf_, (DWORD)len_, &bytes_written, nullptr);
     }
 #else
-    ::write(_pty_master_fd, buf_, len_);
+    ssize_t bytes_written = ::write(_pty_master_fd, buf_, len_);
+    if (bytes_written != len_) {
+      fprintf(stderr, "Write error PTY: %d != %d\n", (int)bytes_written, (int)len_);
+    }
 #endif
   }
 }
