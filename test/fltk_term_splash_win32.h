@@ -23,4 +23,5 @@
 " echo           ╚═╝    ╚═╝ &&"
 " echo( &&"
 " timeout /t 3 >nul &&"
-" cls\r\n"
+" @echo on &&"
+" @cls\r\n"
