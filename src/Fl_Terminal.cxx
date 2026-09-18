@@ -3171,7 +3171,7 @@ void Fl_Terminal::handle_escseq(char c) {
       for (int i = 0; i < tot; i++) {
         if (!handle_private_mode(escseq.val(i), mode)) {
           char buf[40];
-          snprintf(buf, sizeof(buf), "\e[?%d%c", escseq.val(i), mode);
+          snprintf(buf, sizeof(buf), "\x1b[?%d%c", escseq.val(i), mode);
           do_callback(this, (void *)buf, (Fl_Callback_Reason)997);
         }
       }
