@@ -189,7 +189,7 @@ void Fl_PTY_Terminal::write_pty(const char *buf_, size_t len_) {
     }
 #else
     ssize_t bytes_written = ::write(_pty_master_fd, buf_, len_);
-    if (bytes_written != len_) {
+    if ((int)bytes_written != (int)len_) {
       fprintf(stderr, "Write error PTY: %d != %d\n", (int)bytes_written, (int)len_);
     }
 #endif
