@@ -1293,11 +1293,11 @@ Fl_Terminal::Utf8Char* Fl_Terminal::u8c_cursor(void) {
 //    NOTE: 'newsize' should always be at least 'ring_cols()'..
 //
 void Fl_Terminal::init_tabstops(int newsize) {
-  if (newsize > tabstops_.size()) {               // enlarge?
+  if (newsize > (int)tabstops_.size()) {          // enlarge?
     std::vector<bool> oldstops = tabstops_;       // save old stops
     tabstops_.resize(newsize, false);             // alloc new
     for (int t=0; t<newsize; t++) {               // init new tabstops:
-      tabstops_[t] = (t<oldstops.size())
+      tabstops_[t] = (t<(int)oldstops.size())
                        ? oldstops[t]              // copy old
                        : ((t % 8) == 0);          // new defaults
     }
@@ -1309,7 +1309,7 @@ void Fl_Terminal::init_tabstops(int newsize) {
 // Reset all tabstops to default 8th char
 void Fl_Terminal::default_tabstops(void) {
   init_tabstops(ring_cols());                // issue #882
-  for (int t=1; t<tabstops_.size(); t++)     // t=1: skip 0
+  for (int t=1; t<(int)tabstops_.size(); t++)// t=1: skip 0
     tabstops_[t] = ((t % 8) == 0);           // every 8th char is a tabstop
 }
 
@@ -2671,7 +2671,7 @@ void Fl_Terminal::cursor_tab_right(int count) {
   while (count-- > 0) {
     // Find next tabstop
     while (++X < disp_cols()) {
-      if ( (X<tabstops_.size()) && tabstops_[X] ) // found?
+      if ( (X<(int)tabstops_.size()) && tabstops_[X] ) // found?
         { cursor_.col(X); return; }               // move cur, done
     }
   }
@@ -2684,7 +2684,7 @@ void Fl_Terminal::cursor_tab_left(int count) {
   int X = cursor_.col();
   while ( count-- > 0 )
     while ( --X > 0 )                             // search for tabstop
-      if ( X<tabstops_.size() && tabstops_[X] )   // found?
+      if ( X<(int)tabstops_.size() && tabstops_[X] )   // found?
         { cursor_.col(X); return; }               // move cur, done
   cursor_sol();
 }
