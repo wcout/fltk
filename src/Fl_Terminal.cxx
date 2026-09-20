@@ -1293,17 +1293,14 @@ Fl_Terminal::Utf8Char* Fl_Terminal::u8c_cursor(void) {
 //    NOTE: 'newsize' should always be at least 'ring_cols()'..
 //
 void Fl_Terminal::init_tabstops(int newsize) {
-  if (newsize > tabstops_size_) {                 // enlarge?
-    char *oldstops = tabstops_;                   // save old stops
-    int   oldsize  = tabstops_size_;              // save old size
-    tabstops_ = (char*)malloc(newsize);           // alloc new
+  if (newsize > tabstops_.size()) {               // enlarge?
+    std::vector<bool> oldstops = tabstops_;       // save old stops
+    tabstops_.resize(newsize, false);             // alloc new
     for (int t=0; t<newsize; t++) {               // init new tabstops:
-      tabstops_[t] = (oldstops && t<oldsize)
+      tabstops_[t] = (t<oldstops.size())
                        ? oldstops[t]              // copy old
-                       : ((t % 8) == 0) ? 1 : 0;  // new defaults
+                       : ((t % 8) == 0);          // new defaults
     }
-    if (oldstops) free((void*)oldstops);          // dump old stops
-    tabstops_size_ = newsize;
   } else {
     // Same size or smaller? Do nothing -- just keep old tabstops
   }
@@ -1312,25 +1309,25 @@ void Fl_Terminal::init_tabstops(int newsize) {
 // Reset all tabstops to default 8th char
 void Fl_Terminal::default_tabstops(void) {
   init_tabstops(ring_cols());                // issue #882
-  for (int t=1; t<tabstops_size_; t++)       // t=1: skip 0
-    tabstops_[t] = ((t % 8) == 0) ? 1 : 0;   // every 8th char is a tabstop
+  for (int t=1; t<tabstops_.size(); t++)     // t=1: skip 0
+    tabstops_[t] = ((t % 8) == 0);           // every 8th char is a tabstop
 }
 
 // Clear all tabstops
 void Fl_Terminal::clear_all_tabstops(void) {
-  memset(tabstops_, 0, tabstops_size_);
+  tabstops_.clear();
 }
 
 // Set tabstop at current cursor x position
 void Fl_Terminal::set_tabstop(void) {
-  int index = clamp(cursor_col(), 0, tabstops_size_-1);    // clamp cursor pos
-  tabstops_[index] = 1;                                    // set tabstop
+  int index = clamp(cursor_col(), 0, tabstops_.size()-1);   // clamp cursor pos
+  tabstops_[index] = true;                                 // set tabstop
 }
 
 // Clear tabstop at current cursor x position
 void Fl_Terminal::clear_tabstop(void) {
-  int index = clamp(cursor_col(), 0, tabstops_size_-1);    // clamp cursor pos
-  tabstops_[index] = 0;                                    // clear tabstop
+  int index = clamp(cursor_col(), 0, tabstops_.size()-1);  // clamp cursor pos
+  tabstops_[index] = false;                                // clear tabstop
 }
 
 // Apply settings to scrollbar appropriate for h/v scrolling.
@@ -1452,6 +1449,7 @@ void Fl_Terminal::refit_disp_to_screen(void) {
         }
         // Handle enlarging ring's display
         ring_.resize(display_rows()+1, dcols, hist_rows(), *current_style_);
+		  init_tabstops(dcols);
       }
     } else {                                    // shrinking widget?
       for (int i=0; i<(-drow_diff); i++) {      // carefully loop thru each row change
@@ -1527,6 +1525,7 @@ void Fl_Terminal::resize_display_columns(int dcols) {
   if (dcols == disp_cols()) return;
   // Change cols, preserves previous content if possible
   ring_.resize(disp_rows(), dcols, hist_rows(), *current_style_);
+  init_tabstops(dcols);
   update_scrollbar();
 }
 
@@ -2672,7 +2671,7 @@ void Fl_Terminal::cursor_tab_right(int count) {
   while (count-- > 0) {
     // Find next tabstop
     while (++X < disp_cols()) {
-      if ( (X<tabstops_size_) && tabstops_[X] )   // found?
+      if ( (X<tabstops_.size()) && tabstops_[X] ) // found?
         { cursor_.col(X); return; }               // move cur, done
     }
   }
@@ -2685,7 +2684,7 @@ void Fl_Terminal::cursor_tab_left(int count) {
   int X = cursor_.col();
   while ( count-- > 0 )
     while ( --X > 0 )                             // search for tabstop
-      if ( (X<tabstops_size_) && tabstops_[X] )   // found?
+      if ( X<tabstops_.size() && tabstops_[X] )   // found?
         { cursor_.col(X); return; }               // move cur, done
   cursor_sol();
 }
@@ -3908,8 +3907,7 @@ void Fl_Terminal::init_(int X,int Y,int W,int H,const char*L,int rows,int cols,i
   Fl_Group::box(FL_DOWN_FRAME);         // set before update_screen_xywh()
   update_screen_xywh();
   // Tabs
-  tabstops_       = 0;
-  tabstops_size_  = 0;
+  tabstops_.clear();
   // Init ringbuffer. Also creates default tabstops
   if (rows == -1 || cols == -1) {
     int newrows = h_to_row(scrn_.h());  // rows based on height
@@ -3964,8 +3962,6 @@ void Fl_Terminal::init_(int X,int Y,int W,int H,const char*L,int rows,int cols,i
 Fl_Terminal::~Fl_Terminal(void) {
   // Note: RingBuffer class handles destroying itself
   stop_cursor_blink();
-  if (tabstops_)
-    { free(tabstops_); tabstops_ = 0; }
   if (autoscroll_dir_)
     { Fl::remove_timeout(autoscroll_timer_cb, this); autoscroll_dir_ = 0; }
   if (redraw_timer_)

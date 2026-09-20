@@ -869,8 +869,7 @@ private:
   EscapeSeq      escseq;            // Escape sequence parsing (ESC[ xterm/vt100)
   bool           show_unknown_;     // if true, show unknown chars as '¿' (default off)
   bool           ansi_;             // if true, parse ansi codes (default on)
-  char          *tabstops_;         // array of tab stops (0|1)   \__ TODO: This should probably
-  int            tabstops_size_;    // size of tabstops[] array   /         be a class "TabStops".
+  std::vector<bool> tabstops_;      // array of tab stops (0|1)
   Fl_Rect        scrn_;             // terminal screen xywh inside box(), margins, and scrollbar
   int            autoscroll_dir_;   // 0=autoscroll timer off, 3=scrolling up, 4=scrolling down
   int            autoscroll_amt_;   // #pixels above or below edge, used for autoscroll speed
