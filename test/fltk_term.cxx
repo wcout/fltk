@@ -1,17 +1,17 @@
 /*
 
-	Fully workable FLTK interactive terminal using
-	an improved 'Fl_Terminal' widget.
+   Fully workable FLTK interactive terminal using
+   an improved 'Fl_Terminal' widget.
 
-	(c) 2026 wcout@gmx.net
+   (c) 2026 wcout@gmx.net
 
-	It is running many applications like editors (vim) and
-	tools like w3m or btop nearly perfectly.
+   It is running many applications like editors (vim) and
+   tools like w3m or btop nearly perfectly.
 
-	Initially written for Linux only, but later tried to be made
-	cross platform using Google Gemini.
+   Initially written for Linux only, but later tried to be made
+   cross platform using Google Gemini.
 
-	Under Windows (tested only on WIN11), it uses a reader thread
+   Under Windows (tested only on WIN11), it uses a reader thread
    to fetch the output to the terminal without blocking UI.
    On Linux/macOs it uses the Fl::add_fd() callback mechanism.
 
