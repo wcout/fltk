@@ -16,31 +16,35 @@
    On Linux/macOs it uses the Fl::add_fd() callback mechanism.
 
 */
-#include <FL/Fl.H>
-#include <FL/Fl_Double_Window.H>
-#include <FL/Fl_Terminal.H>
-#include <FL/fl_draw.H>
-// OS-specific includes & globals
-#ifndef NTDDI_VERSION
-#define NTDDI_VERSION 0x0A000006
-#endif
-#ifdef _WIN32
-#undef _WIN32_WINNT
-#define _WIN32_WINNT 0x0A00
-#undef WINVER
-#define WINVER 0x0A00
 
+#ifdef _WIN32
 #include <windows.h>
-#include <wincon.h>
-#include <io.h>
-#include <fcntl.h>
+#if defined(NTDDI_VERSION) && (NTDDI_VERSION >= 0x0A000006)
+// WINAPI CreatePseudoConsole() exists from Windows 10/6 (or higher)
+#define HAS_PSEUDO_CONSOLE 1
+#else // NTDDI_VERSION not defined or too low
+#define HAS_PSEUDO_CONSOLE 0
+#endif
+
+#else // Linux, macOs
+#define HAS_PSEUDO_CONSOLE 1
+#endif
+
+#if HAS_PSEUDO_CONSOLE
+
+// -------------------------Fl_PTY_Terminal.H-------------------------------
+//
+// Fl_PTY_Terminal - A pseudo terminal widget for Fast Light Tool Kit (FLTK).
+//
+#ifndef Fl_PTY_Terminal_H
+#define Fl_PTY_Terminal_H
+
+#include <FL/Fl_Terminal.H>
+// OS-specific includes & globals
+#ifdef _WIN32
+#include <windows.h>
 #else
-#include <fcntl.h>
-#include <unistd.h>
 #include <stdlib.h>
-#include <sys/wait.h>
-#include <sys/ioctl.h>
-#include <errno.h>
 #endif
 
 // PTY terminal class with resize logic
@@ -78,37 +82,47 @@ public:
     return _inited;
   }
 private:
-  int  _pty_master_fd;
-  bool _inited;
-  int _log;
-  FILE *_logfile;
+  int  _pty_master_fd  = -1;
+  bool _inited         = false;
+  int _log             = 0;
+  FILE *_logfile       = stderr;
 #ifdef _WIN32
   HANDLE _hPipeInWrite = INVALID_HANDLE_VALUE;
   HANDLE _hPipeOutRead = INVALID_HANDLE_VALUE;
+  HANDLE _hWaitHandle  = INVALID_HANDLE_VALUE;
   HPCON _hPC = nullptr;
-  HANDLE _hWaitHandle = NULL;
 public:
   HANDLE readPipe() const {
     return _hPipeOutRead;
   }
 #endif
 };
+#endif
+// --snip-------------------Fl_PTY_Terminal.H-------------------------------
+
+// -------------------------Fl_PTY_Terminal.cxx-----------------------------
+//
+// Fl_PTY_Terminal - A pseudo terminal widget for Fast Light Tool Kit (FLTK).
+//
+//UNCOMMENT #include "Fl_PTY_Terminal.H"
+#ifdef _WIN32
+#include <wincon.h>
+#include <io.h>
+#include <fcntl.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/ioctl.h>
+#include <errno.h>
+#endif
+#include <FL/fl_draw.H> // fl_width()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 //  PTY terminal class with resize logic implementation
 ////////////////////////////////////////////////////////////////////////////////////////////////
 Fl_PTY_Terminal::Fl_PTY_Terminal(int x_, int y_, int w_, int h_, const char* l_/* = nullptr*/) :
-  Fl_Terminal(x_, y_, w_, h_, l_),
-  _pty_master_fd(-1),
-  _inited(false),
-  _log(0),
-  _logfile(stderr)
-#ifdef _WIN32
-  ,_hPipeInWrite(INVALID_HANDLE_VALUE),
-  _hPipeOutRead(INVALID_HANDLE_VALUE),
-  _hPC(nullptr)
-#endif
-{
+  Fl_Terminal(x_, y_, w_, h_, l_) {
   _inited = init();
   if (_inited) {
 #ifndef _WIN32
@@ -122,8 +136,14 @@ Fl_PTY_Terminal::~Fl_PTY_Terminal() {
   if (_hPC) {
     ClosePseudoConsole(_hPC);
   }
+  if (_hWaitHandle != INVALID_HANDLE_VALUE) {
+    CloseHandle(_hWaitHandle);
+  }
   if (_hPipeInWrite != INVALID_HANDLE_VALUE) {
     CloseHandle(_hPipeInWrite);
+  }
+  if (_hPipeOutRead != INVALID_HANDLE_VALUE) {
+    CloseHandle(_hPipeOutRead);
   }
 #else
   if (_pty_master_fd >= 0) {
@@ -277,7 +297,6 @@ bool Fl_PTY_Terminal::init() {
 
   RegisterWaitForSingleObject(&_hWaitHandle, pi.hProcess, WaitCallback, this, INFINITE, WT_EXECUTEONLYONCE);
 
-  CloseHandle(pi.hProcess);
   CloseHandle(pi.hThread);
 
   _pty_master_fd = 1; // dummy, for code unification
@@ -672,9 +691,11 @@ void Fl_PTY_Terminal::command(const char *cmd_) {
   write_pty(cmd_, strlen(cmd_));
   write_pty("\n", 1);
 }
+// --snip-------------------Fl_PTY_Terminal.cxx-----------------------------
 
-////////////////////////////////////////////////////////////////////////////////////////////////
-
+//
+//  FLTK-Term application
+//
 static int log_ = 0;
 static int no_splash = 0;
 static FILE *logfile = nullptr;
@@ -754,6 +775,9 @@ void parse_command_line(int argc, char *argv[]) {
   }
 }
 
+#include <FL/Fl.H>
+#include <FL/Fl_Double_Window.H>
+
 int main(int argc, char** argv) {
   parse_command_line(argc, argv);
 #ifdef _WIN32
@@ -832,3 +856,10 @@ int main(int argc, char** argv) {
   delete terminal;
   return result;
 }
+#else // HAS_PSEUDO_CONSOLE
+#include <FL/fl_ask.H>
+int main() {
+  fl_message_title("fltk_term");
+  fl_alert("WIN32 version not supported!\n(need WIN10/6 or higher)");
+}
+#endif
