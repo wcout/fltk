@@ -531,6 +531,10 @@ int Fl_PTY_Terminal::handle(int event) {
       write_pty("\033[3~", 4); // ANSI Escape-Code for Delete key
       return 1;
     }
+    if (key == FL_Insert) {
+      write_pty("\033[2~", 4); // ANSI Escape-Code for Insert key
+      return 1;
+    }
     if (key == FL_Home) {
       if (state & FL_CTRL) {
         write_pty("\033[1;5H", 6);  // ANSI Escape-Code for Home key
