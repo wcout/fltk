@@ -3315,25 +3315,23 @@ cup:
         // (Without ignoring it "!p" will be displayed during a 'reset' command)
         break;
       case 'q': set_cursor_style(val0);   break; // ESC[>#q set cursor style (block/line/blink..)
-      case 'r':
+      case 'r':                                  // ESC[>#r set scroll region (# = top;bottom)
         switch (clamp(tot,0,2)) {
-          case 0:
-            val0 = 1;
-            val1 = display_rows();
-            val1 = 0;
+          case 0:                                // no parameters = reset scroll region to whole screen
+            val0 = 1;                            // top=1
+            val1 = display_rows();               // bottom = screen height
             break;
-          case 1:
-            val0 = clamp(val0,1,display_rows());
+          case 1:                                // top only
+            val0 = clamp(val0,1,display_rows()); // top = [1,screen height]
             val1 = display_rows();
-            val1 = 0;
             break;
           case 2:
-            val0 = clamp(val0,1,display_rows());
-            val1 = clamp(val1,1,display_rows());
+            val0 = clamp(val0,1,display_rows()); // top = [1,screen height]
+            val1 = clamp(val1,1,display_rows()); // bottom = [1,screen height]
             break;
         }
-        set_scroll_region(val0, val1);
-        cursor_home();
+        set_scroll_region(val0, val1);           // adjust to new scroll region
+        cursor_home();                           // always followed by cursor home
         break;
       case 't': handle_DECRARA();         break; // ESC[#..$t -- (DECRARA) Reverse attribs in Rect Area (row,col)
       default: goto not_implemented;
