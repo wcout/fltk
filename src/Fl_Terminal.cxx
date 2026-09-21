@@ -1449,7 +1449,7 @@ void Fl_Terminal::refit_disp_to_screen(void) {
         }
         // Handle enlarging ring's display
         ring_.resize(display_rows()+1, dcols, hist_rows(), *current_style_);
-		  init_tabstops(dcols);
+        init_tabstops(dcols);
       }
     } else {                                    // shrinking widget?
       for (int i=0; i<(-drow_diff); i++) {      // carefully loop thru each row change
