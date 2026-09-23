@@ -2724,8 +2724,8 @@ void Fl_Terminal::cursor_blink(void *d) {
 }
 
 void Fl_Terminal::start_cursor_blink() {
-  stop_cursor_blink();
   if (cursor_.style() % 2 && Fl::focus() == this) {
+    stop_cursor_blink();
     on_cursor_blink(true);
     Fl::add_timeout(0.5, cursor_blink, this);
   }
@@ -4402,11 +4402,12 @@ int Fl_Terminal::handle(int e) {
     case FL_ENTER:
     case FL_LEAVE:
       return 1;
-    case FL_UNFOCUS:
     case FL_FOCUS:
+      Fl::focus(this); // needed for start_cursor() to go (is set anyway later by caller, if we return 1)
+    case FL_UNFOCUS:
       e == FL_FOCUS ? start_cursor_blink() : stop_cursor_blink();
       redraw();
-      return Fl::visible_focus() ? 1 : 0;
+      return 1;
     case FL_KEYBOARD:
       // ^C -- Copy?
       if ((Fl::event_state()&(FL_CTRL|FL_COMMAND)) && Fl::event_key()=='c') {
