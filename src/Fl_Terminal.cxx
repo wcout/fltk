@@ -3503,8 +3503,6 @@ void Fl_Terminal::plot_char(char c, int drow, int dcol) {
 }
 
 void Fl_Terminal::validate_cursor(bool do_scroll) {
-  cursor_state_ = true;
-  start_cursor_blink();
   if (cursor_.col() >= display_columns()) {
     if (!do_scroll)                          // no scroll?
       { cursor_eol(); }                      // put at EOL
@@ -3663,6 +3661,8 @@ void Fl_Terminal::append_utf8(const char *buf, int len/*=-1*/) {
     }
   }
   if (mod) display_modified();
+  cursor_state_ = true;
+  start_cursor_blink();
 }
 
 /**
@@ -3676,6 +3676,8 @@ void Fl_Terminal::append_ascii(const char *s) {
   if (!s) return;
   while ( *s ) print_char(*s++);            // handles display_modified()
   display_modified();
+  cursor_state_ = true;
+  start_cursor_blink();
 }
 
 /**
