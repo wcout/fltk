@@ -374,7 +374,7 @@ void Fl_PTY_Terminal::input(const std::string& buffer) {
       fprintf(_logfile, "Send %d bytes to terminal:\n", (int)bytes_read);
       dump(buf, bytes_read);
     }
-    append(buf);
+    append_utf8(buf, bytes_read);
   }
 }
 
