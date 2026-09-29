@@ -810,7 +810,7 @@ std::vector<Fl_Terminal::Utf8Char> Fl_Terminal::RingBuffer::new_copy(int drows, 
   while ((src_row >= src_stop_row) && (dst_row >= 0)) {
     Utf8Char *src = u8c_ring_row(src_row);
     Utf8Char *dst = &new_ring_chars[dst_row*dst_cols];
-    for (int col=0; col<tcols; col++ ) *dst++ = *src++;
+    memcpy(dst, src, tcols*sizeof(Utf8Char));
     --src_row;
     --dst_row;
   }
@@ -896,7 +896,7 @@ bool Fl_Terminal::RingBuffer::is_disp_ring_row(int grow) const {
 void Fl_Terminal::RingBuffer::move_disp_row(int src_row, int dst_row) {
   Utf8Char *src = u8c_disp_row(src_row);
   Utf8Char *dst = u8c_disp_row(dst_row);
-  for (int col=0; col<disp_cols(); col++) *dst++ = *src++;
+  memcpy(dst, src, disp_cols()*sizeof(Utf8Char));
 }
 
 // Clear the display rows 'sdrow' thru 'edrow' inclusive using specified CharStyle 'style'
@@ -2339,7 +2339,7 @@ void Fl_Terminal::insert_rows(int count) {
   while (src_drow >= cursor_.row()) {                             // walk srcrow upwards to cursor row
     Utf8Char *src = u8c_disp_row(src_drow--);
     Utf8Char *dst = u8c_disp_row(dst_drow--);
-    for (int dcol=0; dcol<disp_cols(); dcol++) *dst++ = *src++;   // move
+    memcpy(dst, src, disp_cols()*sizeof(Utf8Char));               // move
   }
   // Blank remaining rows upwards to and including cursor line
   while (dst_drow >= cursor_.row()) {                             // walk srcrow to curs line
@@ -2363,8 +2363,7 @@ void Fl_Terminal::delete_rows(int count) {
   while (src_drow < bottom) {                                // walk srcrow to EOD
     Utf8Char *src = u8c_disp_row(src_drow++);
     Utf8Char *dst = u8c_disp_row(dst_drow++);
-    for (int dcol=0; dcol<disp_cols(); dcol++)
-      *dst++ = *src++;                                       // move
+    memcpy(dst, src, disp_cols()*sizeof(Utf8Char));          // move
   }
   // Blank remaining rows downwards to End Of Display
   while (dst_drow < bottom) {                                // walk srcrow to EOD
