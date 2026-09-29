@@ -888,6 +888,7 @@ private:
   bool           sync_;             // flags "synchronized output mode" (default: false)
   bool           cursor_state_;     // flags in blinking mode: on/off state (default: true)
   bool           bracketed_paste_;  // flags "bracketed paste mode" (default: false)
+  bool           disable_color_bleeding_; // flags use default (instead of current) color for scrolled line (default: false)
 protected:
   bool           alternate_buffer() const  { return alternate_buffer_; }
   bool           bracketed_paste() const  { return bracketed_paste_; }

@@ -2321,7 +2321,10 @@ void Fl_Terminal::select_line(int grow) {
 */
 void Fl_Terminal::scroll(int rows) {
   // Scroll the ring
-  ring_.scroll(rows, *current_style_);
+  CharStyle style = *current_style_;
+  if (disable_color_bleeding_)           // set at auto-wrap (that's what gnome terminal does)
+    style.sgr_reset();                   // fill scrolled line with default color
+  ring_.scroll(rows, style);
   if (rows > 0) update_scrollbar();      // scroll up? changes hist, so scrollbar affected
   else          clear_mouse_selection(); // scroll dn? clear mouse select; it might wrap ring
 }
@@ -2468,6 +2471,7 @@ void Fl_Terminal::reset_modes(void) {
   sync_ = false;
   cursor_state_ = true;
   bracketed_paste_ = false;
+  disable_color_bleeding_ = false;
 }
 
 /**
@@ -3505,9 +3509,12 @@ void Fl_Terminal::validate_cursor(bool do_scroll) {
   if (cursor_.col() >= display_columns()) {
     if (!do_scroll)                          // no scroll?
       { cursor_eol(); }                      // put at EOL
-    else
-      { cursor_crlf(1); }                    // do scroll? crlf
+    else {
+      disable_color_bleeding_ = true;        // fill newly created line by scroll with default color
+      cursor_crlf(1);                        // do scroll? crlf
+      disable_color_bleeding_ = false;
     }
+  }
 }
 
 /**
