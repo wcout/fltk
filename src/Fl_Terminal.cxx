@@ -2479,6 +2479,7 @@ void Fl_Terminal::reset_modes(void) {
   mouse selection, homes cursor, resets tabstops. Same as \c "<ESC>c"
 */
 void Fl_Terminal::reset_terminal(void) {
+  reset_modes();
   current_style_->sgr_reset();        // reset current style
   clear_screen_home();                // clear screen, home cursor
   clear_history();
