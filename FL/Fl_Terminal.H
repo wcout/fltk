@@ -437,6 +437,8 @@ protected:
     int         fontheight_;       // font height (in pixels)
     int         fontdescent_;      // font descent (pixels below font baseline)
     int         charwidth_;        // width of a fixed width ASCII character
+    Fl_Color    ctrstcolor_;       // current contrast color
+  protected:
   public:
     CharStyle(bool fontsize_defer);
     CharStyle() {}                 // needed for alternate buffer handling
@@ -445,11 +447,11 @@ protected:
     // Colors - All access to colors are by Fl_Color only.
     //          There are three ways to SET colors: Fl_Color, rgb, xterm(uchar)
     //
-    Fl_Color color_;
     Fl_Color fltk_fg_color(uchar ci);
     Fl_Color fltk_bg_color(uchar ci);
     Fl_Color fgcolor(void) const;
     Fl_Color bgcolor(void) const;
+    Fl_Color ctrstcolor(void) const     { return ctrstcolor_; }
     Fl_Color defaultfgcolor(void) const { return defaultfgcolor_; }
     Fl_Color defaultbgcolor(void) const { return defaultbgcolor_; }
     Fl_Font fontface(void) const        { return fontface_; }
@@ -467,6 +469,7 @@ protected:
     void bgcolor(int r,int g,int b)     { bgcolor_ = (r<<24) | (g<<16) | (b<<8); clr_charflag(BG_XTERM); }
     void fgcolor(Fl_Color val)          { fgcolor_ = val;                        clr_charflag(FG_XTERM); }
     void bgcolor(Fl_Color val)          { bgcolor_ = val;                        clr_charflag(BG_XTERM); }
+    void ctrstcolor(Fl_Color val)       { ctrstcolor_ = val; }
     // Xterm colors
     void fgcolor_xterm(Fl_Color val)    { fgcolor_ = val;                        set_charflag(FG_XTERM); }
     void bgcolor_xterm(Fl_Color val)    { bgcolor_ = val;                        set_charflag(BG_XTERM); }
@@ -1105,12 +1108,17 @@ protected:
   /// Returns the current offset into the ring buffer.
   inline int offset(void) const    { return ring_.offset(); }
 
+  /**
+    Virtual method (stub) to report back terminal status,
+    which can be overidden by derived classes.
+   */
+  virtual void send_pty(const char *buf) {}
+
   // TODO: CLEAN UP WHAT'S PUBLIC, AND WHAT SHOULD BE 'PROTECTED' AND 'PRIVATE'
   //       Some of the public stuff should, quite simply, "not be".
 
   // API: Terminal features
 public:
-  virtual void send_pty(const char *buf) {}
   // API: Scrollbar
   int   scrollbar_size(void) const;
   void  scrollbar_size(int val);

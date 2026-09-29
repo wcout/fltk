@@ -524,12 +524,12 @@ Fl_Terminal::CharStyle::CharStyle(bool fontsize_defer) {
   attrib_           = 0;
   charflags_        = (FG_XTERM | BG_XTERM);
   defaultfgcolor_   = DefaultFgColor;
-  defaultbgcolor_   = NoColor;   // special color: doesn't draw, 'shows thru' to box()
+  defaultbgcolor_   = NoColor;         // special color: doesn't draw, 'shows thru' to box()
   fgcolor_          = defaultfgcolor_;
   bgcolor_          = defaultbgcolor_;
   fontface_         = FL_COURIER;
   fontsize_         = 14;
-  color_            = 0x00000000;
+  ctrstcolor_       = 0x00000000;
   if (!fontsize_defer) update();       // normal behavior
   else                 update_fake();  // use fake values instead
 }
@@ -1824,8 +1824,8 @@ void Fl_Terminal::textcolor(Fl_Color val) {
 */
 void Fl_Terminal::color(Fl_Color val) {
   Fl_Group::color(val);
-  current_style_->color_ = Fl::get_color(val);
-  Fl_Color c = fl_contrast(current_style_->defaultfgcolor(), current_style_->color_);
+  current_style_->ctrstcolor(Fl::get_color(val));
+  Fl_Color c = fl_contrast(current_style_->defaultfgcolor(), current_style_->ctrstcolor());
   textfgcolor_default(Fl::get_color(c));
   redraw();
 }
@@ -3037,7 +3037,7 @@ bool Fl_Terminal::osc_command(const char *cmd) {
     } else if(c.find("?") == 0) {
       // query current background/cursor color
       uchar r, g, b;
-      Fl::get_color(mode == 11 ? current_style_->color_ : cursor_.bgcolor(), r, g, b);
+      Fl::get_color(mode == 11 ? current_style_->ctrstcolor() : cursor_.bgcolor(), r, g, b);
       char buf[40];
       // answer in 16-bit notation (according to docs most commonly used)
       snprintf(buf, sizeof(buf), "\033]%d;rgb:%04x/%04x/%04x\007", mode, (int)r*257, (int)g*257, (int)b*257);
@@ -3083,7 +3083,7 @@ void Fl_Terminal::toggle_alternate_buffer(bool on) {
     cursor_ = saved_cursor;
     resize(x(), y(), w(), h());
     // handle background color changed while in alterenate buffer
-    if (color() != current_style_->color_) {
+    if (color() != current_style_->ctrstcolor()) {
       color(color());
     }
   }
@@ -4087,7 +4087,7 @@ void Fl_Terminal::draw_row_bg(int grow, int X, int Y) const {
     }
     pwidth = u8c->pwidth_int();
     bg_col = is_inside_selection(grow, gcol)              // text in mouse select?
-               ? fl_contrast(select_.selectionbgcolor(), current_style_->color_)               // ..use select bg color
+               ? fl_contrast(select_.selectionbgcolor(), current_style_->ctrstcolor())               // ..use select bg color
                : (u8c->attrib() & Fl_Terminal::INVERSE)   // Inverse mode?
                  ? u8c->attr_fg_color(current_style_->defaultfgcolor())  // ..use fg color for bg
                  : u8c->attr_bg_color(this);              // ..use bg color for bg
@@ -4335,7 +4335,7 @@ int Fl_Terminal::handle_selection(int e) {
   bool gcr = false;
   bool is_rowcol = (xy_to_glob_rowcol(Fl::event_x(), Fl::event_y(), grow, gcol, gcr) > 0)
                    ? true : false;
-  if (mouse_mode_/* && alternate_buffer_*/) {
+  if (mouse_mode_) {
      char buf[40];
      int button = clamp(Fl::event_button() - 1, 0, 2);
      snprintf(buf, sizeof(buf), "\033[<%d;%d;%d%c", (e == FL_DRAG ? 32 + button : button), gcol+1, grow-disp_srow()+1, ((e == FL_PUSH || e == FL_DRAG) ? 'M' : 'm'));
