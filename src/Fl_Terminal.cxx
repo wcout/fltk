@@ -2705,7 +2705,7 @@ void Fl_Terminal::on_cursor_blink(bool reset/*=false*/) {
   if (count) {
     cursor_state_ = !cursor_state_;
     count--;
-    display_modified();
+    redraw();
   }
 }
 
@@ -3657,8 +3657,10 @@ void Fl_Terminal::append_utf8(const char *buf, int len/*=-1*/) {
     }
   }
   if (mod) display_modified();
-  cursor_state_ = true;
-  start_cursor_blink();
+  if (redraw_style_ != RATE_LIMITED) {
+    cursor_state_ = true;
+    start_cursor_blink();
+  }
 }
 
 /**
@@ -3672,8 +3674,10 @@ void Fl_Terminal::append_ascii(const char *s) {
   if (!s) return;
   while ( *s ) print_char(*s++);            // handles display_modified()
   display_modified();
-  cursor_state_ = true;
-  start_cursor_blink();
+  if (redraw_style_ != RATE_LIMITED) {
+    cursor_state_ = true;
+    start_cursor_blink();
+  }
 }
 
 /**
@@ -3831,6 +3835,8 @@ void Fl_Terminal::autoscroll_timer_cb(void *udata) {
 void Fl_Terminal::redraw_timer_cb2(void) {
   //DRAWDEBUG ::printf("--- UPDATE TICK %.02f\n", redraw_rate_); fflush(stdout);
   if (redraw_modified_ && !sync_) {
+    cursor_state_ = true;
+    start_cursor_blink();
     redraw();                                                // Timer triggered redraw
     redraw_modified_ = false;                                // acknowledge modified flag
     Fl::repeat_timeout(redraw_rate_, redraw_timer_cb, this); // restart timer
