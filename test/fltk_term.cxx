@@ -783,6 +783,7 @@ int main(int argc, char** argv) {
 #ifdef _WIN32
   Fl::lock();
 #else
+  setenv("HISTCONTROL", "ignorespace", 1); // don't put splash commands in history
   if (!no_set_term) {
     setenv("TERM", "xterm-256color", 1);
   }
