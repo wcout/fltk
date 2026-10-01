@@ -1,6 +1,6 @@
 /*
 
-   Fully workable FLTK interactive terminal using
+   Fully workable FLTK interactive terminal based on
    an improved 'Fl_Terminal' widget.
 
    (c) 2026 wcout@gmx.net
@@ -8,8 +8,8 @@
    It is running many applications like editors (vim) and
    tools like w3m or btop nearly perfectly.
 
-   Initially written for Linux only, but later tried to be made
-   cross platform using Google Gemini.
+   Initially written for Linux only, but later made
+   cross platform using Google Gemini (and much rework!).
 
    Under Windows (tested only on WIN11), it uses a reader thread
    to fetch the output to the terminal without blocking UI.
@@ -704,6 +704,7 @@ static int history_lines = -1; // -1: Fl_Terminal default (100)
 static int columns = 80;
 static int rows = 25;
 static int color = FL_WHITE;
+static int fontsize = 0;
 static std::string cmd; // initial command (none)
 
 void parse_command_line(int argc, char *argv[]) {
@@ -718,6 +719,20 @@ void parse_command_line(int argc, char *argv[]) {
       w_ = w;
       h_ = h;
     }
+  };
+  auto set_font =[&](const char *font) ->int {
+    static std::string fontname;
+    fontname = font;
+    int fontsize = 0;
+    size_t pos;
+    if ((pos = fontname.find("::")) != std::string::npos) {
+      fontsize = atoi(&fontname.c_str()[pos + 2]);
+      fontname.erase(pos);
+    }
+    if (fontname.size()) {
+      Fl::set_font(FL_COURIER, fontname.c_str());
+    }
+    return fontsize;
   };
   auto test_arg =[&](const char *arg, char v, int &var) -> bool {
     size_t n = 0;
@@ -737,38 +752,38 @@ void parse_command_line(int argc, char *argv[]) {
       if (std::string(argv[i]) == "--help") {
         fprintf(stderr, "Usage:\n"
                 "-D ....... dark mode\n"
+                "-F name .. use font (optional append ::size)\n"
+                "-L name .. log to file\n"
                 "-l[l] .... log input [and output]\n"
-                "-F name .. log to file\n"
                 "-g WxH ... geometry width x height chars\n"
                 "-h n ..... use n history lines\n"
                 "-s ....... don't show splash screen\n"
                 "-t ....... don't set TERM=xterm-256color\n");
         exit(0);
       }
-      if (argv[i][1] == 'D') {
+      char o = argv[i][1];
+      if (o == 'D') {
         color = 0x10101000; // dark mode
       }
       test_arg(argv[i], 'l', log_);
       test_arg(argv[i], 't', no_set_term);
       test_arg(argv[i], 's', no_splash);
-      if (argv[i][1] == 'h') {
-        if (i + 1 < argc) {
-          i++;
-          if (argv[i][0] >= '0' && argv[i][0] <= '9') {
-            history_lines = atoi(argv[i]);
-          }
-        }
-      }
-      if (argv[i][1] == 'g') {
-        if (i + 1 < argc) {
-          i++;
-          geometry(argv[i], columns, rows);
-        }
-      }
-      if (argv[i][1] == 'F') {
-        if (i + 1 < argc) {
-          i++;
-          logfile = fopen(argv[i], "w");
+      if (++i < argc) { // options with parameter
+        switch (o) {
+          case 'h':
+            if (argv[i][0] >= '0' && argv[i][0] <= '9') {
+              history_lines = atoi(argv[i]);
+            }
+            break;
+          case 'g':
+            geometry(argv[i], columns, rows);
+            break;
+          case 'F':
+            fontsize = set_font(argv[i]);
+            break;
+          case 'L':
+            logfile = fopen(argv[i], "w");
+            break;
         }
       }
     }
@@ -797,7 +812,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   term.logging(log_, logfile ? logfile : stderr);
-  term.textsize(18);
+  term.textsize(fontsize > 0 ? fontsize : 18);
   term.color(color);
   term.hscrollbar_style(Fl_Terminal::SCROLLBAR_OFF);
   term.scrollbar_size(6);
