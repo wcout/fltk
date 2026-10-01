@@ -48,9 +48,6 @@
 #define MAX(a,b) ((a)>=(b)) ? (a) : (b)    // Return larger of two values
 #define ABS(a)   ((a)<0) ? -(a) : (a)      // Return abs value
 
-static const Fl_Color DefaultFgColor = 0xd0d0d000; // off white
-static const Fl_Color NoColor = 0xffffffff;
-
 // Return val clamped between min and max
 static int clamp(int val, int min, int max)
   { return (val<min) ? min : (val>max) ? max : val; }

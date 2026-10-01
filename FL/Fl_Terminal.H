@@ -324,6 +324,9 @@ class FL_EXPORT Fl_Terminal : public Fl_Group {
   //////////////////////////////////////
   ////// Fl_Terminal Public Enums //////
   //////////////////////////////////////
+private:
+	static const Fl_Color DefaultFgColor = 0xd0d0d000; // off white
+	static const Fl_Color NoColor = 0xffffffff;        // "shine through" color
 public:
   /**
     \enum RedrawStyle
@@ -485,8 +488,8 @@ protected:
     // SGR MODES: Set Graphics Rendition
     void sgr_reset(void) {                         // e.g. ESC[0m
       attrib(Fl_Terminal::NORMAL);
-      if (charflags() & FG_XTERM) fgcolor_xterm(defaultfgcolor_);
-      else                        fgcolor(defaultfgcolor_);
+      if (charflags() & FG_XTERM) fgcolor_xterm(NoColor);
+      else                        fgcolor(NoColor);
       if (charflags() & BG_XTERM) bgcolor_xterm(defaultbgcolor_);
       else                        bgcolor(defaultbgcolor_);
     }
