@@ -133,17 +133,6 @@ Fl_Color Fl_Terminal::CharStyle::fltk_bg_color(uchar ci) {
   return xterm_bg_colors_[ci];
 }
 
-/*
-  Reset the style to default e.g. via ESC[0m
-*/
-void Fl_Terminal::CharStyle::sgr_reset(void) {
-  attrib(Fl_Terminal::NORMAL);
-  if (charflags() & FG_XTERM) fgcolor_xterm(NoColor);
-  else                        fgcolor(NoColor);
-  if (charflags() & BG_XTERM) bgcolor_xterm(defaultbgcolor_);
-  else                        bgcolor(defaultbgcolor_);
-}
-
 // See if an Fl_Boxtype is FL_XXX_FRAME
 static bool is_frame(Fl_Boxtype b) {
   if (b == FL_UP_FRAME       || b == FL_DOWN_FRAME      ||

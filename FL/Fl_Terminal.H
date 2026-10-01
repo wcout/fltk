@@ -483,7 +483,13 @@ protected:
     void update(void);
     void update_fake(void);
     // SGR MODES: Set Graphics Rendition
-    void sgr_reset(void); // ESC[0m
+    void sgr_reset(void) {                         // e.g. ESC[0m
+      attrib(Fl_Terminal::NORMAL);
+      if (charflags() & FG_XTERM) fgcolor_xterm(defaultfgcolor_);
+      else                        fgcolor(defaultfgcolor_);
+      if (charflags() & BG_XTERM) bgcolor_xterm(defaultbgcolor_);
+      else                        bgcolor(defaultbgcolor_);
+    }
     int  onoff(bool flag, Attrib a) const { return (flag ? (attrib_ | a) : (attrib_ & ~a)); }
     void sgr_bold(bool val)      { attrib_ = (uchar)onoff(val, Fl_Terminal::BOLD);      } // e.g. ESC[1m
     void sgr_dim(bool val)       { attrib_ = (uchar)onoff(val, Fl_Terminal::DIM);       } // e.g. ESC[2m
