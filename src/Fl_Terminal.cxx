@@ -4379,11 +4379,9 @@ int Fl_Terminal::handle_selection(int e) {
     case FL_RELEASE: {
       select_.end();
       // middlemouse gets immediate copy of selection
-      if (is_selection()) {
-        const char *copy = selection_text();
-        if (*copy) Fl::copy(copy, (int)strlen(copy), 0);
-        free((void*)copy);
-      }
+      const char *copy = selection_text();
+      if (*copy) Fl::copy(copy, (int)strlen(copy), 0);
+      free((void*)copy);
       return 1;
     }
     default:
@@ -4412,7 +4410,7 @@ int Fl_Terminal::handle(int e) {
     case FL_KEYBOARD:
       // ^C -- Copy?
       if ((Fl::event_state()&(FL_CTRL|FL_COMMAND)) && Fl::event_key()=='c') {
-        const char *copy = is_selection() ? selection_text() : fl_strdup(" ");
+        const char *copy = selection_text();
         if (*copy) Fl::copy(copy, (int)strlen(copy), 1);  // paste buffer
         free((void*)copy);
         return 1;
