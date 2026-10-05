@@ -894,6 +894,7 @@ private:
   bool           alternate_buffer_; // flags use of alternate buffer with ESC[?1024h/l
   bool           DECCKM_;           // flags cursor key mode (default: false)
   bool           cursor_visible_;   // flags cursor visible (default: true)
+  bool           insert_mode_;      // flags insert mode (default: false)
   bool           origin_mode_;      // flags origin mode (default: false)
   bool           autowrap_;         // flags cursor autowrap at end of line (default: true)
   bool           mouse_mode_;       // flags report of mouse events (default: false)
@@ -979,8 +980,10 @@ protected:
   void scroll(int rows);
   void insert_rows(int count);
   void delete_rows(int count);
+  void insert_char_eol(const char *text, int len, int drow, int dcol, int rep);
   void insert_char_eol(char c, int drow, int dcol, int rep);
   void insert_char(char c, int rep);
+  void insert_char(const char *text, int len, int rep);
   void delete_chars(int drow, int dcol, int rep);
   void delete_chars(int rep);
   void reset_modes(void);

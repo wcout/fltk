@@ -2373,8 +2373,7 @@ void Fl_Terminal::repeat_char(char c, int rep) {
     plot_char(c, row, col + n);
 }
 
-/// Insert char 'c' for 'rep' times at display row \p 'drow' and column \p 'dcol'.
-void Fl_Terminal::insert_char_eol(char c, int drow, int dcol, int rep) {
+void Fl_Terminal::insert_char_eol(const char *text, int len, int drow, int dcol, int rep) {
   // Walk the row from the eol backwards to the col position
   //     In this example, rep=3:
   //
@@ -2395,8 +2394,21 @@ void Fl_Terminal::insert_char_eol(char c, int drow, int dcol, int rep) {
   Utf8Char *dst = u8c_disp_row(drow)+disp_cols()-1;     // start dst at 'j'
   for (int col=(disp_cols()-1); col>=dcol; col--) {     // loop col in reverse: eol -> dcol
     if (col >= (dcol+rep)) *dst-- = *src--;             // let assignment do move
-    else                   (dst--)->text_ascii(c,style);// assign chars displaced
+    else                   (dst--)->text_utf8(text, len, style);// assign chars displaced
   }
+}
+
+/// Insert char 'c' for 'rep' times at display row \p 'drow' and column \p 'dcol'.
+void Fl_Terminal::insert_char_eol(char c, int drow, int dcol, int rep) {
+  insert_char_eol(&c, 1, drow, dcol, rep);
+}
+
+/**
+  Insert utf8 char 'text/len' at the current cursor position for 'rep' times.
+  Does not wrap; characters at end of line are lost.
+*/
+void Fl_Terminal::insert_char(const char *text, int len, int rep) {
+  insert_char_eol(text, len, cursor_.row(), cursor_.col(), rep);
 }
 
 /**
@@ -2404,7 +2416,7 @@ void Fl_Terminal::insert_char_eol(char c, int drow, int dcol, int rep) {
   Does not wrap; characters at end of line are lost.
 */
 void Fl_Terminal::insert_char(char c, int rep) {
-  insert_char_eol(c, cursor_.row(), cursor_.col(), rep);
+  insert_char_eol(&c, 1, cursor_.row(), cursor_.col(), rep);
 }
 
 /// Delete char(s) at (drow,dcol) for 'rep' times.
@@ -2451,6 +2463,7 @@ void Fl_Terminal::reset_modes(void) {
   alternate_buffer_ = false;
   DECCKM_ = false;
   cursor_visible_ = true;
+  insert_mode_ = false;
   origin_mode_ = false;
   autowrap_ = true;
   mouse_mode_ = false;
@@ -3296,6 +3309,13 @@ cup:
           default: goto not_implemented;
         }
         break;
+      case 'h':
+      case 'l':
+        switch (val0) {
+          case 4: insert_mode_ = mode == 'h'; break; // ESC[4h/l - turn insert mode on/off
+          default: goto not_implemented;
+        }
+        break;
       case 'm': handle_SGR();             break; // ESC[#m - set character attributes (SGR)
       case 's': save_cursor();            break; // ESC[s - save cur pos (xterm+gnome)
       case 'u': restore_cursor();         break; // ESC[u - restore cur pos (xterm+gnome)
@@ -3536,7 +3556,7 @@ void Fl_Terminal::print_char(const char *text, int len/*=-1*/) {
     handle_escseq(*text);
   } else {                                     // Handle printable char..
     if (!validate_cursor(do_scroll)) return;
-    plot_char(text, len, cursor_row(), cursor_col());
+    insert_mode_ ? insert_char(text, len, 1) : plot_char(text, len, cursor_row(), cursor_col());
     cursor_right(1, do_scroll);
   }
 }
@@ -3576,7 +3596,7 @@ void Fl_Terminal::print_char(char c) {
       if (c == 'x') return print_char("│");
     }
     if (!validate_cursor(do_scroll)) return;
-    plot_char(c, cursor_row(), cursor_col());
+    insert_mode_ ? insert_char(c, 1) : plot_char(c, cursor_row(), cursor_col());
     cursor_right(1, do_scroll);
     return;
   }
