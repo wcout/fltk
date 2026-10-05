@@ -1035,7 +1035,7 @@ private:
   void set_scroll_region(int top, int bottom);
   void toggle_alternate_buffer(bool on);
   bool handle_private_mode(int mode, int cmd);
-  void validate_cursor(bool do_scroll);
+  bool validate_cursor(bool do_scroll);
   // Printing
   void handle_ctrl(char c);
   bool is_printable(char c);

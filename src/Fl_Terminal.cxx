@@ -2622,7 +2622,7 @@ void Fl_Terminal::cursor_left(int count) {
   scrolls up one line if \p do_scroll is true.
 */
 void Fl_Terminal::cursor_right(int count, bool do_scroll) {
-  validate_cursor(do_scroll);
+  if (!validate_cursor(do_scroll)) return;
   while (count-- > 0) {
     if (cursor_.right() > disp_cols()) {       // hit right edge?
       if (!do_scroll)                          // no scroll?
@@ -3492,8 +3492,9 @@ void Fl_Terminal::plot_char(char c, int drow, int dcol) {
   u8c->text_ascii(c, *current_style_);
 }
 
-void Fl_Terminal::validate_cursor(bool do_scroll) {
+bool Fl_Terminal::validate_cursor(bool do_scroll) {
   if (cursor_.col() >= display_columns()) {
+    if (!autowrap_) return false;
     if (!do_scroll)                          // no scroll?
       { cursor_eol(); }                      // put at EOL
     else {
@@ -3502,6 +3503,7 @@ void Fl_Terminal::validate_cursor(bool do_scroll) {
       disable_color_bleeding_ = false;
     }
   }
+  return true;
 }
 
 /**
@@ -3533,7 +3535,7 @@ void Fl_Terminal::print_char(const char *text, int len/*=-1*/) {
   } else if (escseq.parse_in_progress()) {     // ESC sequence in progress?
     handle_escseq(*text);
   } else {                                     // Handle printable char..
-    validate_cursor(do_scroll);
+    if (!validate_cursor(do_scroll)) return;
     plot_char(text, len, cursor_row(), cursor_col());
     cursor_right(1, do_scroll);
   }
@@ -3573,7 +3575,7 @@ void Fl_Terminal::print_char(char c) {
       if (c == 'w') return print_char("┬");
       if (c == 'x') return print_char("│");
     }
-    validate_cursor(do_scroll);
+    if (!validate_cursor(do_scroll)) return;
     plot_char(c, cursor_row(), cursor_col());
     cursor_right(1, do_scroll);
     return;
