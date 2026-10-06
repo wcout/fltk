@@ -2363,14 +2363,23 @@ void Fl_Terminal::delete_rows(int count) {
   clear_mouse_selection();
 }
 
-// Repeat plotting char 'c' for 'rep' times, not to exceed end of line.
+// Repeat plotting utf8 character 'text/len' for 'rep' times, not to exceed end of line.
 // Does not process control sequences or move the cursor.
-void Fl_Terminal::repeat_char(char c, int rep) {
+// Returns the number of actual repeats.
+int Fl_Terminal::repeat_char(const char *text, int len, int rep) {
   const int row = cursor_.row();
   const int col = cursor_.col();
   rep = clamp(rep, 1, disp_cols() - col);
   for (int n = 0; n < rep; n++)
-    plot_char(c, row, col + n);
+    plot_char(text, len, row, col + n);
+  return rep;
+}
+
+// Repeat plotting char 'c' for 'rep' times, not to exceed end of line.
+// Does not process control sequences or move the cursor.
+// Returns the number of actual repeats.
+int Fl_Terminal::repeat_char(char c, int rep) {
+  return repeat_char(&c, 1, rep);
 }
 
 void Fl_Terminal::insert_char_eol(const char *text, int len, int drow, int dcol, int rep) {
@@ -2471,6 +2480,7 @@ void Fl_Terminal::reset_modes(void) {
   cursor_state_ = true;
   bracketed_paste_ = false;
   disable_color_bleeding_ = false;
+  last_char_ = {};
 }
 
 /**
@@ -3295,7 +3305,10 @@ cup:
         }
         break;
       case 'a': goto not_implemented;  // TODO   // ESC[#a - (HPR) move cursor relative [columns] (default=[row,col+1])
-      case 'b': goto not_implemented;  // TODO   // ESC[#b - (REP) repeat prev graphics char # times
+      case 'b':                                  // ESC[#b - (REP) repeat prev graphics char # times
+        // DEBUG fprintf(stderr, "repeat char %.*s for %d times\n", last_char_.length(), last_char_.text_utf8(), val0);
+        cursor_.col(cursor_.col() + repeat_char(last_char_.text_utf8(), last_char_.length(), val0));
+        break;
       case 'd':
         cursor_.row(clamp(val0, 1, dw)-1);       // ESC[#d - (VPA) line pos absolute [row]
         break;
@@ -3483,6 +3496,7 @@ fail:
   // text_utf8() warns we must do invalid checks first
   if (len>u8c->max_utf8() || u8len<0 || u8len!=len) goto fail;
   u8c->text_utf8(text, len, *current_style_);
+  last_char_ = *u8c;
 }
 
 /**
@@ -3510,6 +3524,7 @@ void Fl_Terminal::plot_char(char c, int drow, int dcol) {
   }
   Utf8Char *u8c = u8c_disp_row(drow) + dcol;
   u8c->text_ascii(c, *current_style_);
+  last_char_ = *u8c;
 }
 
 bool Fl_Terminal::validate_cursor(bool do_scroll) {

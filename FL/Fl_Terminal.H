@@ -890,6 +890,7 @@ private:
   bool           redraw_modified_;  // display modified; used by redraw_timer_cb() to rate limit redraws
   bool           redraw_timer_;     // if true, redraw timer is running
   PartialUtf8Buf pub_;              // handles Partial Utf8 Buffer (pub)
+  Utf8Char       last_char_;        // last plotted character (needed for repeat \e[##b)
   bool           line_graphics_;    // produce box drawing characters with j,k,l,m,n,q,x
   bool           alternate_buffer_; // flags use of alternate buffer with ESC[?1024h/l
   bool           DECCKM_;           // flags cursor key mode (default: false)
@@ -1054,7 +1055,8 @@ protected:
   const Utf8Char* utf8_char_at_disp(int drow, int dcol) const;
   const Utf8Char* utf8_char_at_glob(int grow, int gcol) const;
 private:
-  void repeat_char(char c, int rep);
+  int repeat_char(char c, int rep);
+  int repeat_char(const char *text, int len, int rep);
   void utf8_cache_clear(void);
   void utf8_cache_flush(void);
   // API: Character display output
