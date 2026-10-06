@@ -595,12 +595,16 @@ int Fl_PTY_Terminal::handle(int event) {
       return 1;
     }
     if (key == FL_F + 12) {
-      // toggle dark/light mode
-      if (color() == FL_WHITE) {
-        color(FL_BLACK);
-      } else {
-        color(FL_WHITE);
+      // toggle background color
+      static std::vector<Fl_Color> bg_colors = { FL_WHITE, FL_BLACK, FL_DARK_BLUE, FL_DARK_GREEN,
+                                                 0x10101000, 0x22222200, 0xdddddd00, 0xf0f0f000
+                                               };
+      static size_t current_bg_index = 0;
+      current_bg_index++;
+      if (current_bg_index >= bg_colors.size()) {
+        current_bg_index = 0;
       }
+      color(bg_colors[current_bg_index]);
       return 1;
     }
     if (key == FL_Page_Up) {
