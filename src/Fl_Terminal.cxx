@@ -3304,7 +3304,9 @@ cup:
             break;
         }
         break;
-      case 'a': goto not_implemented;  // TODO   // ESC[#a - (HPR) move cursor relative [columns] (default=[row,col+1])
+      case 'a':                                  // ESC[#a - (HPR) move cursor relative [columns] (default=[row,col+1])
+        cursor_right(escseq.defvalmax(1,dw), no_scroll); // in most implementations identical
+        break;
       case 'b':                                  // ESC[#b - (REP) repeat prev graphics char # times
         // DEBUG fprintf(stderr, "repeat char %.*s for %d times\n", last_char_.length(), last_char_.text_utf8(), val0);
         cursor_.col(cursor_.col() + repeat_char(last_char_.text_utf8(), last_char_.length(), val0));
@@ -3312,7 +3314,9 @@ cup:
       case 'd':
         cursor_.row(clamp(val0, 1, dw)-1);       // ESC[#d - (VPA) line pos absolute [row]
         break;
-      case 'e': goto not_implemented;  // TODO   // ESC[#e - line pos relative [rows]
+      case 'e':                                  // ESC[#e - line pos relative [rows]
+        cursor_down(escseq.defvalmax(1,dh), no_scroll); // in most implementations identical
+        break;
       case 'f':                                  // <ESC>[#f - (CUP) cursor position (#'s 1 based)
         goto cup;                                //            (same as ESC[H)
       case 'g':                                  // ESC[...g? Tabulation Clear (TBC)
