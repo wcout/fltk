@@ -491,6 +491,9 @@ int Fl_PTY_Terminal::handle(int event) {
     int key = Fl::event_key();
     int state = Fl::event_state();
 
+    // Scroll terminal view to bottom (so input will be seen)
+    scrollbar->value(0);
+
     // Catch TAB key for auto completion
     if (key == FL_Tab) {
       char tab_char = '\t';
