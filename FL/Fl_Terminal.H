@@ -565,9 +565,9 @@ protected:
   public:
     // Public methods
     Utf8Char(void);                             // ctor
-    Utf8Char(const Utf8Char& o);                // copy ctor
-    ~Utf8Char(void);                            // dtor
-    Utf8Char& operator=(const Utf8Char& o);     // assignment
+    Utf8Char(const Utf8Char &o) = default;
+    ~Utf8Char(void) = default;                  // dtor
+    Utf8Char& operator=(const Utf8Char& o) = default;
     inline int max_utf8() const { return max_utf8_; }
     void text_utf8(const char *text, int len, const CharStyle& style);
     void text_ascii(char c, const CharStyle& style);

@@ -29,11 +29,10 @@
 #include <stdarg.h>     // va_list
 #include <assert.h>
 #include <string>
+#include <algorithm>    // std::copy
 
 #include <FL/Fl.H>
 #include <FL/Fl_Terminal.H>
-
-#include "flstring.h"
 
 #include <FL/fl_utf8.h> // fl_utf8len1
 #include <FL/fl_draw.H>
@@ -472,7 +471,7 @@ int Fl_Terminal::EscapeSeq::parse(char c) {
       if (append_buff(c) < 0) goto pfail;   // save ';' in buf
       return success;
     }
-    if (fl_ascii_isdigit(c)) {              // parsing an integer?
+    if (c >= '0' && c <= '9') {             // parsing an integer?
       if (!valbuffp_)                       // valbuffp not set yet?
         { valbuffp_ = buffp_; }             // point to first char in integer string
       if (append_buff(c) < 0) goto pfail;   // add value to buffer
@@ -592,34 +591,6 @@ Fl_Terminal::Utf8Char::Utf8Char(void) {
   charflags_ = 0;
   fgcolor_   = NoColor;
   bgcolor_   = NoColor;   // special color: doesn't draw, 'shows thru' to box()
-}
-
-// copy ctor
-Fl_Terminal::Utf8Char::Utf8Char(const Utf8Char& src) {
-  // local instance not initialized yet; init first, then copy text
-  text_[0]   = ' ';
-  len_       = 1;
-  attrib_    = src.attrib_;
-  charflags_ = src.charflags_;
-  fgcolor_   = src.fgcolor_;
-  bgcolor_   = src.bgcolor_;
-  text_utf8_(src.text_utf8(), src.length());    // copy the src text
-}
-
-// assignment
-Fl_Terminal::Utf8Char& Fl_Terminal::Utf8Char::operator=(const Utf8Char& src) {
-  // local instance is already initialized, so just change its contents
-  text_utf8_(src.text_utf8(), src.length());    // local copy src text
-  attrib_    = src.attrib_;
-  charflags_ = src.charflags_;
-  fgcolor_   = src.fgcolor_;
-  bgcolor_   = src.bgcolor_;
-  return *this;
-}
-
-// dtor
-Fl_Terminal::Utf8Char::~Utf8Char(void) {
-  len_ = 0;
 }
 
 // Set 'text_' to valid UTF-8 string 'text'.
@@ -796,7 +767,7 @@ std::vector<Fl_Terminal::Utf8Char> Fl_Terminal::RingBuffer::new_copy(int drows, 
   while ((src_row >= src_stop_row) && (dst_row >= 0)) {
     Utf8Char *src = u8c_ring_row(src_row);
     Utf8Char *dst = &new_ring_chars[dst_row*dst_cols];
-    memcpy(dst, src, tcols*sizeof(Utf8Char));
+    std::copy(src, src + tcols, dst);
     --src_row;
     --dst_row;
   }
@@ -882,7 +853,7 @@ bool Fl_Terminal::RingBuffer::is_disp_ring_row(int grow) const {
 void Fl_Terminal::RingBuffer::move_disp_row(int src_row, int dst_row) {
   Utf8Char *src = u8c_disp_row(src_row);
   Utf8Char *dst = u8c_disp_row(dst_row);
-  memcpy(dst, src, disp_cols()*sizeof(Utf8Char));
+  std::copy(src, src + disp_cols(), dst);
 }
 
 // Clear the display rows 'sdrow' thru 'edrow' inclusive using specified CharStyle 'style'
@@ -2328,7 +2299,7 @@ void Fl_Terminal::insert_rows(int count) {
   while (src_drow >= cursor_.row()) {                             // walk srcrow upwards to cursor row
     Utf8Char *src = u8c_disp_row(src_drow--);
     Utf8Char *dst = u8c_disp_row(dst_drow--);
-    memcpy(dst, src, disp_cols()*sizeof(Utf8Char));               // move
+    std::copy(src, src + disp_cols(), dst);                       // move
   }
   // Blank remaining rows upwards to and including cursor line
   while (dst_drow >= cursor_.row()) {                             // walk srcrow to curs line
@@ -2352,7 +2323,7 @@ void Fl_Terminal::delete_rows(int count) {
   while (src_drow < bottom) {                                // walk srcrow to EOD
     Utf8Char *src = u8c_disp_row(src_drow++);
     Utf8Char *dst = u8c_disp_row(dst_drow++);
-    memcpy(dst, src, disp_cols()*sizeof(Utf8Char));          // move
+    std::copy(src, src + disp_cols(), dst);                  // move
   }
   // Blank remaining rows downwards to End Of Display
   while (dst_drow < bottom) {                                // walk srcrow to EOD
