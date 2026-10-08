@@ -818,6 +818,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Failed to initialize PTY backend\n");
     return 1;
   }
+  term.box(FL_FLAT_BOX);
   term.logging(log_, logfile ? logfile : stderr);
   term.textsize(fontsize > 0 ? fontsize : 18);
   term.color(color);
