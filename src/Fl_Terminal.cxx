@@ -2994,9 +2994,9 @@ bool Fl_Terminal::osc_command(const char *cmd) {
   int mode = atoi(cmd);
   std::string c(cmd);
   if (c.size() > 2 && c[1] == ';' && mode >= 0 && mode <= 7) {
-     // set window title/icon (we just set window title always)
-     if (window()) window()->copy_label(&c.c_str()[2]);
-     return true;
+    // set window title/icon (we just set window title always)
+    if (window()) window()->copy_label(&c.c_str()[2]);
+    return true;
   }
   if (mode == 11 || mode == 12) {
     // 11: background color, 12: cursor color
