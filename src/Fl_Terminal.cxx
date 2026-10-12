@@ -2986,6 +2986,12 @@ void Fl_Terminal::handle_DECRARA(void) {
   // TODO: MAYBE NEVER
 }
 
+/*static*/
+void Fl_Terminal::set_window_title_cb(void *d) {
+  Fl_Terminal *term = static_cast<Fl_Terminal *>(d);
+  if (term->window()) term->window()->copy_label(term->window_title_.c_str());
+}
+
 /**
   Handle the VT100 OSC sequence <tt>ESC ] cmd ; text BEL/ESC\<tt>
 */
@@ -2994,8 +3000,12 @@ bool Fl_Terminal::osc_command(const char *cmd) {
   int mode = atoi(cmd);
   std::string c(cmd);
   if (c.size() > 2 && c[1] == ';' && mode >= 0 && mode <= 7) {
-    // set window title/icon (we just set window title always)
-    if (window()) window()->copy_label(&c.c_str()[2]);
+    // set window title/icon (we just set window title)
+    if (mode == 0) { // window title
+      Fl::remove_timeout(set_window_title_cb, this);   // defer setting it, as
+      Fl::add_timeout(0.1, set_window_title_cb, this); // several OSC[0 commands
+      window_title_ = c.substr(2);                     // may be sent at each CR
+    }
     return true;
   }
   if (mode == 11 || mode == 12) {
@@ -3977,6 +3987,7 @@ Fl_Terminal::~Fl_Terminal(void) {
     { Fl::remove_timeout(autoscroll_timer_cb, this); autoscroll_dir_ = 0; }
   if (redraw_timer_)
     { Fl::remove_timeout(redraw_timer_cb, this); redraw_timer_ = false; }
+  Fl::remove_timeout(set_window_title_cb, this);
   delete current_style_;
 }
 

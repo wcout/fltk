@@ -906,6 +906,7 @@ private:
 protected:
   bool           alternate_buffer() const  { return alternate_buffer_; }
   bool           bracketed_paste() const  { return bracketed_paste_; }
+  std::string    window_title_;
 
 protected:
   // Ring buffer management
@@ -945,6 +946,7 @@ private:
   void        autoscroll_timer_cb2(void);
   static void redraw_timer_cb(void*);             // redraw rate limiting timer
   void        redraw_timer_cb2(void);
+  static void set_window_title_cb(void*);
 
   // Screen management
 protected:
