@@ -17,22 +17,7 @@
 
 */
 
-#ifdef _WIN32
-#include <windows.h>
-#if defined(NTDDI_VERSION) && (NTDDI_VERSION >= 0x0A000006)
-// WINAPI CreatePseudoConsole() exists from Windows 10/6 (or higher)
-#define HAS_PSEUDO_CONSOLE 1
-#else // NTDDI_VERSION not defined or too low
-#define HAS_PSEUDO_CONSOLE 0
-#endif
-
-#else // Linux, macOs
-#define HAS_PSEUDO_CONSOLE 1
-#endif
-
-#if HAS_PSEUDO_CONSOLE
-
-// -------------------------Fl_PTY_Terminal.H-------------------------------
+// --✂----------------------Fl_PTY_Terminal.H-------------------------------
 //
 // Fl_PTY_Terminal - A pseudo terminal widget for Fast Light Tool Kit (FLTK).
 //
@@ -43,7 +28,16 @@
 // OS-specific includes & globals
 #ifdef _WIN32
 #include <windows.h>
-#else
+#if defined(NTDDI_VERSION) && (NTDDI_VERSION >= 0x0A000006)
+// WINAPI CreatePseudoConsole() exists from Windows 10/RS5 (10/2018) or higher
+#define HAS_PSEUDO_CONSOLE 1
+#else // NTDDI_VERSION not defined or too low
+#define HAS_PSEUDO_CONSOLE 0
+DECLARE_HANDLE(HPCON);
+#pragma message("WARNING: PTY functionality not available (needs WIN10 >= RS5)")
+#endif
+#else // Linux, macOS
+#define HAS_PSEUDO_CONSOLE 1
 #include <stdlib.h>
 #endif
 
@@ -98,13 +92,16 @@ public:
 #endif
 };
 #endif
-// --snip-------------------Fl_PTY_Terminal.H-------------------------------
 
-// -------------------------Fl_PTY_Terminal.cxx-----------------------------
+// --snip--✂----------------Fl_PTY_Terminal.H-------------------------------
+
+#if HAS_PSEUDO_CONSOLE
+
+// --✂----------------------Fl_PTY_Terminal.cxx-----------------------------
 //
 // Fl_PTY_Terminal - A pseudo terminal widget for Fast Light Tool Kit (FLTK).
 //
-//UNCOMMENT #include "Fl_PTY_Terminal.H"
+//UNCOMMENT --> #include <FL/Fl_PTY_Terminal.H>
 #ifdef _WIN32
 #include <wincon.h>
 #include <io.h>
@@ -134,9 +131,11 @@ Fl_PTY_Terminal::Fl_PTY_Terminal(int x_, int y_, int w_, int h_, const char* l_/
 
 Fl_PTY_Terminal::~Fl_PTY_Terminal() {
 #ifdef _WIN32
+#if HAS_PSEUDO_CONSOLE
   if (_hPC) {
     ClosePseudoConsole(_hPC);
   }
+#endif // HAS_PSEUDO_CONSOLE
   if (_hWaitHandle != INVALID_HANDLE_VALUE) {
     CloseHandle(_hWaitHandle);
   }
@@ -260,6 +259,7 @@ bool Fl_PTY_Terminal::init() {
   SetHandleInformation(_hPipeInWrite, HANDLE_FLAG_INHERIT, 0);
   SetHandleInformation(_hPipeOutRead, HANDLE_FLAG_INHERIT, 0);
 
+#if HAS_PSEUDO_CONSOLE
   COORD size = { 80, 25 };
   HRESULT hr = CreatePseudoConsole(size, hPipeInRead, hPipeOutWrite, 0, &_hPC);
   CloseHandle(hPipeInRead);
@@ -306,6 +306,10 @@ bool Fl_PTY_Terminal::init() {
   CreateThread(NULL, 0, ChildReaderThread, this, 0, NULL);
 
   return true;
+#else // HAS_PSEUDO_CONSOLE
+  return false;
+#endif
+
 #else
   // Use POSIX PTY (macOS/Linux)
   _pty_master_fd = ::posix_openpt(O_RDWR | O_CLOEXEC | O_NONBLOCK);
@@ -663,11 +667,13 @@ void Fl_PTY_Terminal::resize(int X, int Y, int W, int H) {
     }
 
 #ifdef _WIN32
+#if HAS_PSEUDO_CONSOLE
     if (_hPC != nullptr) {
       COORD size = { (short)columns, (short)rows };
       // inform Windows ConPTY
       ResizePseudoConsole(_hPC, size);
     }
+#endif // HAS_PSEUDO_CONSOLE
 #else
     if (_pty_master_fd >= 0) {
       // Fill OS structure for terminal size
@@ -699,7 +705,7 @@ void Fl_PTY_Terminal::command(const char *cmd_) {
   write_pty(cmd_, strlen(cmd_));
   write_pty("\n", 1);
 }
-// --snip-------------------Fl_PTY_Terminal.cxx-----------------------------
+// --snip--✂----------------Fl_PTY_Terminal.cxx-----------------------------
 
 //
 //  FLTK-Term application
