@@ -1511,7 +1511,6 @@ void Fl_Terminal::update_screen(bool font_changed) {
       //DEBUG fprintf(stderr, "update_screen(font change): row/cols=%d/%d, cs.width=%d, cs.height=%d\n", display_rows(), display_columns(), current_style_->charwidth(), current_style_->fontheight());
       fl_font(current_style_->fontface(), current_style_->fontsize());
     }
-    cursor_.h(current_style_->fontheight());
   }
   // Update the scrn_* values
   update_screen_xywh();
@@ -2451,6 +2450,7 @@ void Fl_Terminal::reset_modes(void) {
   cursor_state_ = true;
   bracketed_paste_ = false;
   disable_color_bleeding_ = false;
+  cursor_ = {};
   last_char_ = {};
 }
 
@@ -2535,7 +2535,7 @@ void Fl_Terminal::reset_terminal(void) {
 /** Set the cursor's foreground color used for text under the cursor. */
 void Fl_Terminal::cursorfgcolor(Fl_Color val) { cursor_.fgcolor(val); }
 /** Set the cursor's background color used for the cursor itself. */
-void Fl_Terminal::cursorbgcolor(Fl_Color val) { cursor_.bgcolor(val); }
+void Fl_Terminal::cursorbgcolor(Fl_Color val) { cursor_.bgcolor(val); cursor_.dynamic_color(false); }
 /** Get the cursor's foreground color used for text under the cursor. */
 Fl_Color Fl_Terminal::cursorfgcolor(void) const { return cursor_.fgcolor(); }
 /** Get the cursor's background color used for the cursor itself. */
@@ -3016,13 +3016,13 @@ bool Fl_Terminal::osc_command(const char *cmd) {
       int r = std::stoul(c.substr(4).c_str(), nullptr, 16);
       int g = std::stoul(c.substr(7).c_str(), nullptr, 16);
       int b = std::stoul(c.substr(10).c_str(), nullptr, 16);
-      mode == 11 ? color(fl_rgb_color(r, g, b)) : cursor_.bgcolor(fl_rgb_color(r, g, b));
+      mode == 11 ? color(fl_rgb_color(r, g, b)) : cursorbgcolor(fl_rgb_color(r, g, b));
       return true;
     } else if (c.find("#") == 0 && c.size() == 7) {
       // set background/cursor color: support for '#RRGGBB'
       unsigned long bg = std::stoul(c.substr(1).c_str(), nullptr, 16);
       bg <<= 8;
-      mode == 11 ? color(bg) : cursor_.bgcolor(bg);
+      mode == 11 ? color(bg) : cursorbgcolor(bg);
       return true;
     } else if(c.find("?") == 0) {
       // query current background/cursor color
@@ -3938,7 +3938,7 @@ void Fl_Terminal::init_(int X,int Y,int W,int H,const char*L,int rows,int cols,i
     newcols = (newcols >= 1) ? newcols : 1;
     create_ring(newrows, newcols, hist);
   } else {
-    create_ring(rows, cols, 100);
+    create_ring(rows, cols, hist);
   }
   // Misc
   redraw_style_    = RATE_LIMITED;      // NO_REDRAW, RATE_LIMITED, PER_WRITE
@@ -4155,12 +4155,18 @@ void Fl_Terminal::draw_row(int grow, int Y) const {
     }
     int pwidth = u8c->pwidth_int();
     // DRAW CURSOR according to cursor type
+    Fl_Color cbg(cursorbgcolor());
     if (is_cursor) {
       int cx = X;
-      int cy = Y + current_style_->fontheight() - cursor_.h();
+      int cy = Y;
       int cw = pwidth;
-      int ch = cursor_.h();
-      fl_color(cursorbgcolor());
+      int ch = current_style_->fontheight();
+      if (cursor_.dynamic_color()) {
+        cbg = u8c->fgcolor() == NoColor ? current_style_->ctrstcolor() : u8c->fgcolor();
+        if (u8c->bgcolor() == NoColor) cbg = fl_contrast(cbg, color());
+        if (is_inside_selection(grow, gcol)) cbg = fl_contrast(selectionbgcolor(), cbg);
+      }
+      fl_color(cbg);
       if (Fl::focus() == this) {
         switch (cursor_.style()) {
           case 0:
@@ -4185,8 +4191,9 @@ void Fl_Terminal::draw_row(int grow, int Y) const {
     else fg = is_inside_selection(grow, gcol)                // text in mouse selection?
       ? fl_contrast(select_.selectionfgcolor(), textfgcolor_default())                           // ..use selection FG color
       : (u8c->attrib() & Fl_Terminal::INVERSE)               // Inverse attrib?
-        ? u8c->attr_bg_color(this)                           // ..use char's bg color for fg
+        ? u8c->attr_bg_color(this) == NoColor ? current_style_->ctrstcolor() : u8c->attr_bg_color(this)                            // ..use char's bg color for fg
         : u8c->attr_fg_color(current_style_->defaultfgcolor());      // ..use char's fg color for fg
+    if (is_cursor && cursor_.dynamic_color()) fg = fl_contrast(fg, cbg);
     fl_color(fg);
     // 2) Font for text - already set by u8c->fl_font_set() in the above
     if (is_cursor && cursor_.style() <= 2) {      // only for block cursor type:

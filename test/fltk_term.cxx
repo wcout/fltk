@@ -123,6 +123,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////
 Fl_PTY_Terminal::Fl_PTY_Terminal(int x_, int y_, int w_, int h_, const char* l_/* = nullptr*/) :
   Fl_Terminal(x_, y_, w_, h_, l_) {
+  dynamic_cursor_color(true);
   _inited = init();
   if (_inited) {
 #ifndef _WIN32

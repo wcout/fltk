@@ -512,27 +512,25 @@ protected:
   class FL_EXPORT Cursor {
     int      col_;      // cursor's current col (x) position on display
     int      row_;      // cursor's current row (y) position on display
-    int      h_;        // cursor's height (affected by font size)
     Fl_Color fgcolor_;  // cursor's fg color (color of text, if any)
     Fl_Color bgcolor_;  // cursor's bg color
     int      style_;    // cursor's current style
+    bool     dynamic_color_; // flags if cursor color should adapt to 'current' character
   public:
     Cursor(void) {
       col_     = 0;
       row_     = 0;
-      h_       = 10;
       fgcolor_ = 0xfffff000;   // wht
       bgcolor_ = 0x00d00000;   // grn
       style_   = 1;            // block blinking
+      dynamic_color_ = false;  // uses bgcolor_
     }
     int col(void) const          { return col_; }
     int row(void) const          { return row_; }
-    int h(void) const            { return h_; }
     Fl_Color fgcolor(void) const { return fgcolor_; }
     Fl_Color bgcolor(void) const { return bgcolor_; }
     void col(int val)            { col_ = val >= 0 ? val : 0; }
     void row(int val)            { row_ = val >= 0 ? val : 0; }
-    void h(int val)              { h_   = val; }
     void fgcolor(Fl_Color val)   { fgcolor_ = val; }
     void bgcolor(Fl_Color val)   { bgcolor_ = val; }
     int  left(void)              { col_ = (col_>0) ? (col_-1) : 0; return col_; }
@@ -544,6 +542,8 @@ protected:
     void home(void) { row_ = 0; col_ = 0; }
     void style(int s) { style_ = s; }
     int style(void) const { return style_; }
+    void dynamic_color(bool d) { dynamic_color_ = d; }
+    bool dynamic_color(void) const { return dynamic_color_; }
   };
 
   // Utf8Char Class ///////////////////////////////////////////////////////////
@@ -990,6 +990,7 @@ protected:
   void delete_chars(int drow, int dcol, int rep);
   void delete_chars(int rep);
   void reset_modes(void);
+  void dynamic_cursor_color(bool d) { cursor_.dynamic_color(d); }
 public:
  // API: Terminal operations
   void clear(void);
