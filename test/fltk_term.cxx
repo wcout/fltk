@@ -776,21 +776,21 @@ void parse_command_line(int argc, char *argv[]) {
       test_arg(argv[i], 'l', log_);
       test_arg(argv[i], 't', no_set_term);
       test_arg(argv[i], 's', no_splash);
-      if (++i < argc) { // options with parameter
+      if (i + 1 < argc) { // options with parameter
         switch (o) {
           case 'h':
-            if (argv[i][0] >= '0' && argv[i][0] <= '9') {
+            if (argv[++i][0] >= '0' && argv[i][0] <= '9') {
               history_lines = atoi(argv[i]);
             }
             break;
           case 'g':
-            geometry(argv[i], columns, rows);
+            geometry(argv[i++], columns, rows);
             break;
           case 'F':
-            fontsize = set_font(argv[i]);
+            fontsize = set_font(argv[++i]);
             break;
           case 'L':
-            logfile = fopen(argv[i], "w");
+            logfile = fopen(argv[++i], "w");
             break;
         }
       }
