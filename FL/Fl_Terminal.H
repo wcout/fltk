@@ -977,6 +977,7 @@ public:
   const char* selection_text(void) const;
 protected:
   void clear_mouse_selection(void);
+  bool scroll_window_set() const { return ring_.scroll_top() || ring_.scroll_bottom(); }
   bool selection_extend(int X,int Y);
   void select_word(int grow, int gcol);
   void select_line(int grow);

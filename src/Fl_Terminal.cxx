@@ -2281,6 +2281,7 @@ void Fl_Terminal::scroll(int rows) {
   if (disable_color_bleeding_)           // set at auto-wrap (that's what gnome terminal does)
     style.sgr_reset();                   // fill scrolled line with default color
   ring_.scroll(rows, style);
+  if (scroll_window_set()) return;       // application has taken over
   if (rows > 0) update_scrollbar();      // scroll up? changes hist, so scrollbar affected
   else          clear_mouse_selection(); // scroll dn? clear mouse select; it might wrap ring
 }
@@ -2306,6 +2307,7 @@ void Fl_Terminal::insert_rows(int count) {
     for (int dcol=0; dcol<disp_cols(); dcol++)
       dst++->clear(*current_style_);
   }
+  if (scroll_window_set()) return;
   clear_mouse_selection();
 }
 
@@ -2330,6 +2332,7 @@ void Fl_Terminal::delete_rows(int count) {
     for (int dcol=0; dcol<disp_cols(); dcol++)
       dst++->clear(*current_style_);
   }
+  if (scroll_window_set()) return;
   clear_mouse_selection();
 }
 
