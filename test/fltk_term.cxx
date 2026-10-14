@@ -826,6 +826,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   term.box(FL_FLAT_BOX);
+  term.margin(2);
   term.logging(log_, logfile ? logfile : stderr);
   term.textsize(fontsize > 0 ? fontsize : 18);
   term.color(color);

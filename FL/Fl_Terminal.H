@@ -1175,6 +1175,8 @@ public:
   void  margin_right(int val);
   void  margin_top(int val);
   void  margin_bottom(int val);
+  void  margin(int val) { margin_left(val); margin_right(val); margin_top(val); margin_bottom(val); }
+
   // API: Text font/size/color
   void  textfont(Fl_Font val);
   void  textsize(Fl_Fontsize val);
