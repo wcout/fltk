@@ -4087,14 +4087,20 @@ void  Fl_Terminal::hscrollbar_style(ScrollbarStyle val) {
 
  \param[in] grow row number
  \param[in] X, Y top left corner of the row in FLTK coordinates
+
+  Returns the actually used bg colors for this row, which are needed
+  to find a suitable fg color for each cell in the main draw method.
 */
-void Fl_Terminal::draw_row_bg(int grow, int X, int Y) const {
+const std::vector<Fl_Color> &Fl_Terminal::draw_row_bg(int grow, int X, int Y) const {
   int bg_h = current_style_->fontheight();
   int bg_y = Y;
   Fl_Color bg_col;
   int pwidth    = 9;
   int start_col = hscrollbar->visible() ? hscrollbar->value() : 0;
   int end_col   = disp_cols();
+  static std::vector<Fl_Color> bg;
+  bg.resize(end_col - start_col);
+  size_t off = 0;
   const Utf8Char *u8c = u8c_ring_row(grow) + start_col;   // start of spec'd row
   uchar lastattr      = u8c->attrib();
   for (int gcol=start_col; gcol<end_col; gcol++,u8c++) {  // walk columns
@@ -4104,18 +4110,28 @@ void Fl_Terminal::draw_row_bg(int grow, int X, int Y) const {
       lastattr = u8c->attrib();
     }
     pwidth = u8c->pwidth_int();
-    bg_col = is_inside_selection(grow, gcol)              // text in mouse select?
-               ? fl_contrast(select_.selectionbgcolor(), current_style_->ctrstcolor())               // ..use select bg color
-               : (u8c->attrib() & Fl_Terminal::INVERSE)   // Inverse mode?
-                 ? u8c->attr_fg_color(current_style_->defaultfgcolor())  // ..use fg color for bg
-                 : u8c->attr_bg_color(this);              // ..use bg color for bg
+    if (is_inside_selection(grow, gcol)) {                 // text in mouse select?
+      if (u8c->fgcolor() != NoColor)                       // if fg color used,
+         bg_col = u8c->fgcolor();                          // use fg color for bg
+      else bg_col = (u8c->attrib() & Fl_Terminal::INVERSE) // Inverse mode?
+                       ? select_.selectionfgcolor() : select_.selectionbgcolor(); // use selection color
+      bg_col = fl_contrast(bg_col, current_style_->ctrstcolor()); // but ensure it has enough contrast
+      if (u8c->bgcolor() != NoColor) bg_col = fl_contrast(bg_col, u8c->bgcolor());
+    } else {                                               // unselected text
+      bg_col = (u8c->attrib() & Fl_Terminal::INVERSE) ?    // Inverse mode?
+        u8c->attr_fg_color(current_style_->defaultfgcolor())
+          : u8c->attr_bg_color(this);                      // use bg color for bg
+    }
     // Draw only if color != 0xffffffff ('see through' color) or widget's own color().
     if (bg_col != NoColor && bg_col != Fl_Group::color()) {
       fl_color(bg_col);
       fl_rectf(X, bg_y, pwidth, bg_h);
+      bg[off++] = bg_col;
     }
+    else bg[off++] = Fl_Group::color();
     X += pwidth;                                          // advance X to next char
   }
+  return bg;
 }
 
 /**
@@ -4128,8 +4144,9 @@ void Fl_Terminal::draw_row_bg(int grow, int X, int Y) const {
 void Fl_Terminal::draw_row(int grow, int Y) const {
   // Draw background color spans, if any
   int X = scrn_.x();
-  draw_row_bg(grow, X, Y);
-
+  const std::vector<Fl_Color> &bg =
+    draw_row_bg(grow, X, Y); // => the used bg colors for each cell in the row
+  size_t off = 0;
   // Draw foreground text
   int  baseline = Y + current_style_->fontheight() - current_style_->fontdescent();
   int  scrollval = scrollbar->value();
@@ -4143,6 +4160,7 @@ void Fl_Terminal::draw_row(int grow, int Y) const {
   int  underline_y = baseline;
   uchar lastattr = -1;
   bool  is_cursor;
+  bool  is_selection;
   Fl_Color fg;
   int start_col = hscrollbar->visible() ? hscrollbar->value() : 0;
   int end_col   = disp_cols();
@@ -4151,6 +4169,7 @@ void Fl_Terminal::draw_row(int grow, int Y) const {
     const int &dcol = gcol;                               // dcol and gcol are the same
     // Are we drawing the cursor? Only if inside display
     is_cursor = cursor_visible_ && cursor_state_ && inside_display ? cursor_.is_rowcol(drow-scrollval, dcol) : 0;
+    is_selection = is_inside_selection(grow, gcol);
     // Attribute changed since last char?
     if (u8c->attrib() != lastattr) {
       u8c->fl_font_set(*current_style_);                  // pwidth_int() needs fl_font set
@@ -4167,7 +4186,7 @@ void Fl_Terminal::draw_row(int grow, int Y) const {
       if (cursor_.dynamic_color()) {
         cbg = u8c->fgcolor() == NoColor ? current_style_->ctrstcolor() : u8c->fgcolor();
         if (u8c->bgcolor() == NoColor) cbg = fl_contrast(cbg, color());
-        if (is_inside_selection(grow, gcol)) cbg = fl_contrast(selectionbgcolor(), cbg);
+        if (is_selection) cbg = fl_contrast(selectionbgcolor(), cbg);
       }
       fl_color(cbg);
       if (Fl::focus() == this) {
@@ -4191,12 +4210,13 @@ void Fl_Terminal::draw_row(int grow, int Y) const {
     if (is_cursor && cursor_.style() <= 2) {                 // only for block cursor type:
       fg = cursorfgcolor();                                  // color for text under cursor
     }
-    else fg = is_inside_selection(grow, gcol)                // text in mouse selection?
+    else fg = is_selection                                   // text in mouse selection?
       ? fl_contrast(select_.selectionfgcolor(), textfgcolor_default())                           // ..use selection FG color
       : (u8c->attrib() & Fl_Terminal::INVERSE)               // Inverse attrib?
         ? u8c->attr_bg_color(this) == NoColor ? current_style_->ctrstcolor() : u8c->attr_bg_color(this)                            // ..use char's bg color for fg
         : u8c->attr_fg_color(current_style_->defaultfgcolor());      // ..use char's fg color for fg
     if (is_cursor && cursor_.dynamic_color()) fg = fl_contrast(fg, cbg);
+    else if (is_selection) fg = fl_contrast(fg, bg[off]);    // ensure it has enough contrast to row bg
     fl_color(fg);
     // 2) Font for text - already set by u8c->fl_font_set() in the above
     if (is_cursor && cursor_.style() <= 2) {      // only for block cursor type:
@@ -4210,6 +4230,7 @@ void Fl_Terminal::draw_row(int grow, int Y) const {
     if (u8c->attrib() & Fl_Terminal::STRIKEOUT) fl_line(X, strikeout_y, X+pwidth, strikeout_y);
     // Move to next char pixel position
     X += pwidth;
+    off++;
   }
 }
 

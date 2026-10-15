@@ -1077,7 +1077,7 @@ protected:
   int handle_unknown_char(void);
   int handle_unknown_char(int drow, int dcol);
   // Drawing
-  void draw_row_bg(int grow, int X, int Y) const;
+  const std::vector<Fl_Color> &draw_row_bg(int grow, int X, int Y) const;
   void draw_row(int grow, int Y) const;
   void draw_buff(int Y) const;
 private:
