@@ -60,6 +60,7 @@ protected:
   void write_pty(const char *buf_, size_t len_);
   bool init();
   void quit();
+  void reset() override;
 public:
   void dump(const char *buf, size_t n);
   void input(const std::string& buffer);
@@ -120,13 +121,19 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////
 Fl_PTY_Terminal::Fl_PTY_Terminal(int x_, int y_, int w_, int h_, const char* l_/* = nullptr*/) :
   Fl_Terminal(x_, y_, w_, h_, l_) {
-  dynamic_cursor_color(true);
   _inited = init();
   if (_inited) {
 #ifndef _WIN32
     Fl::add_fd(_pty_master_fd, FL_READ, pty_read_callback, this);
 #endif
   }
+  reset();
+}
+
+void Fl_PTY_Terminal::reset() {
+  // turn on "dynamic" colors for cursor and selection
+  dynamic_cursor_color(true);
+  dynamic_selection_color(true);
 }
 
 Fl_PTY_Terminal::~Fl_PTY_Terminal() {

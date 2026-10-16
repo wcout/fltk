@@ -717,6 +717,7 @@ private:
     Fl_Color selectionfgcolor_;
     int state_ ;                        // 0=none, 1=started, 2=extended, 3=done
     bool is_selection_;                 // false: no selection
+    bool dynamic_color_;                // flags if selection color should adapt to 'current' character
   public:
     Selection(Fl_Terminal *terminal);
     int srow(void) const { return srow_; }
@@ -742,6 +743,8 @@ private:
     bool clear(void);
     int  state(void) const { return state_; }
     void scroll(int nrows);
+    void dynamic_color(bool d) { dynamic_color_ = d; }
+    bool dynamic_color(void) const { return dynamic_color_; }
   };
 
   // EscapeSeq Class ///////////////////////////////////////////////////
@@ -991,7 +994,23 @@ protected:
   void delete_chars(int drow, int dcol, int rep);
   void delete_chars(int rep);
   void reset_modes(void);
+  /**
+    Turn on or off dynamic cursor color, where the color of the cursor is derived
+    from the color of the underlying character.
+    Off by default.
+   */
   void dynamic_cursor_color(bool d) { cursor_.dynamic_color(d); }
+  /**
+    Turn on or off dynamic selection color, where the color of the selection
+    is derived from the colors of the underlying characters.
+    Off by default.
+   */
+  void dynamic_selection_color(bool d) { select_.dynamic_color(d); }
+  /**
+    Virtual method (stub) that is called on `terminal_reset()`,
+    which can be overidden by derived classes, to reset own values.
+   */
+  virtual void reset(void) {}
 public:
  // API: Terminal operations
   void clear(void);
