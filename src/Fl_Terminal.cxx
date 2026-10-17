@@ -3108,7 +3108,9 @@ bool Fl_Terminal::handle_private_mode(int mode, int cmd) {
       cursor_visible_ = onoff; break;
     case 1006:
       // support "modern" mouse mode only
-      mouse_mode_ = onoff; break;
+      mouse_mode_ = onoff;
+      if (window()) window()->cursor(mouse_mode_ ? FL_CURSOR_DEFAULT : FL_CURSOR_INSERT);
+      break;
     case 1049:
       // Handle ESC[?1049h/l
       toggle_alternate_buffer(onoff); break;
@@ -4468,6 +4470,7 @@ int Fl_Terminal::handle(int e) {
       return 1;
     case FL_FOCUS:
       Fl::focus(this); // needed for start_cursor() to go (is set anyway later by caller, if we return 1)
+      if (window()) window()->cursor(mouse_mode_ ? FL_CURSOR_DEFAULT : FL_CURSOR_INSERT);
     case FL_UNFOCUS:
       e == FL_FOCUS ? start_cursor_blink() : stop_cursor_blink();
       redraw();
