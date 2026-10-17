@@ -2457,6 +2457,7 @@ void Fl_Terminal::reset_modes(void) {
   cursor_ = {};
   select_ = Selection(this);
   last_char_ = {};
+  app_cursor_ = (Fl_Cursor)-1;
 }
 
 /**
@@ -3109,7 +3110,7 @@ bool Fl_Terminal::handle_private_mode(int mode, int cmd) {
     case 1006:
       // support "modern" mouse mode only
       mouse_mode_ = onoff;
-      if (window()) window()->cursor(mouse_mode_ ? FL_CURSOR_DEFAULT : FL_CURSOR_INSERT);
+      set_app_cursor();
       break;
     case 1049:
       // Handle ESC[?1049h/l
@@ -4457,20 +4458,35 @@ int Fl_Terminal::handle_selection(int e) {
   return 0;
 }
 
+void Fl_Terminal::set_app_cursor(Fl_Cursor c/* = Fl_Cursor(-1)*/) {
+  Fl_Cursor app_cursor = c != Fl_Cursor(-1) ? c : mouse_mode_ ? FL_CURSOR_DEFAULT : FL_CURSOR_INSERT;
+  if (window() && app_cursor != app_cursor_) {
+    //DEBUG fprintf(stderr, "set cursor to %s\n", (app_cursor == FL_CURSOR_DEFAULT ? "default" : "insert"));
+    window()->cursor(app_cursor);
+    app_cursor_ = app_cursor;
+  }
+}
+
 /**
   Handle FLTK events.
 */
 int Fl_Terminal::handle(int e) {
   int ret = Fl_Group::handle(e);
-  if (Fl::event_inside(scrollbar)) return ret;             // early exit for scrollbar
-  if (Fl::event_inside(hscrollbar)) return ret;             // early exit for hscrollbar
+  if (Fl::event_inside(scrollbar) ||
+      Fl::event_inside(hscrollbar)) {
+    set_app_cursor(FL_CURSOR_DEFAULT);           // change cursor over scrollbars to default
+    return ret;                                  // early exit for scrollbar/hscrollbar
+  }
   switch (e) {
+    case FL_MOVE:
+      set_app_cursor();
+      return 1;
     case FL_ENTER:
     case FL_LEAVE:
       return 1;
     case FL_FOCUS:
       Fl::focus(this); // needed for start_cursor() to go (is set anyway later by caller, if we return 1)
-      if (window()) window()->cursor(mouse_mode_ ? FL_CURSOR_DEFAULT : FL_CURSOR_INSERT);
+      set_app_cursor();
     case FL_UNFOCUS:
       e == FL_FOCUS ? start_cursor_blink() : stop_cursor_blink();
       redraw();

@@ -906,6 +906,7 @@ private:
   bool           cursor_state_;     // flags in blinking mode: on/off state (default: true)
   bool           bracketed_paste_;  // flags "bracketed paste mode" (default: false)
   bool           disable_color_bleeding_; // flags use default (instead of current) color for scrolled line (default: false)
+  Fl_Cursor      app_cursor_;       // current application cursor
 protected:
   bool           alternate_buffer() const  { return alternate_buffer_; }
   bool           bracketed_paste() const  { return bracketed_paste_; }
@@ -994,6 +995,7 @@ protected:
   void delete_chars(int drow, int dcol, int rep);
   void delete_chars(int rep);
   void reset_modes(void);
+  void set_app_cursor(Fl_Cursor c = (Fl_Cursor)-1);
   /**
     Turn on or off dynamic cursor color, where the color of the cursor is derived
     from the color of the underlying character.
