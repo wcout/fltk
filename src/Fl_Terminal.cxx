@@ -2911,14 +2911,14 @@ void Fl_Terminal::handle_SGR(void) {     // ESC[...m?
            g = cg;
            b = cb;
         }
-        else if (val > 16 && val < 231) {
+        else if (val >= 16 && val <= 231) {             // 6x6x6 color cube index
           val -= 16;
-          int rl = val / 36;
-          int gl = (val % 36) / 6;
-          int gb = val % 6;
+          int rl = val / 36;                            // index red 0..5
+          int gl = (val % 36) / 6;                      // index green 0..5
+          int gb = val % 6;                             // index blue 0..5
           static const int intensity[] = {0, 95, 135, 175, 215, 255};
-          r = intensity[rl];
-          g = intensity[gl];
+          r = intensity[rl];                            // extract color values
+          g = intensity[gl];                            // from table
           b = intensity[gb];
         }
         else if (val >= 232 && val <= 255) {            // grayscale intensity
