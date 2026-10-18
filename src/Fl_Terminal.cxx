@@ -1483,6 +1483,7 @@ void Fl_Terminal::resize_display_columns(int dcols) {
   if (dcols == disp_cols()) return;
   // Change cols, preserves previous content if possible
   ring_.resize(disp_rows(), dcols, hist_rows(), *current_style_);
+  display_columns(dcols);
   init_tabstops(dcols);
   update_scrollbar();
 }
@@ -2282,7 +2283,7 @@ void Fl_Terminal::scroll(int rows) {
   if (disable_color_bleeding_)           // set at auto-wrap (that's what gnome terminal does)
     style.sgr_reset();                   // fill scrolled line with default color
   ring_.scroll(rows, style);
-  if (scroll_window_set()) return;       // application has taken over
+  if (scroll_region_set()) return;       // application has taken over
   if (rows > 0) update_scrollbar();      // scroll up? changes hist, so scrollbar affected
   else          clear_mouse_selection(); // scroll dn? clear mouse select; it might wrap ring
 }
@@ -2308,7 +2309,7 @@ void Fl_Terminal::insert_rows(int count) {
     for (int dcol=0; dcol<disp_cols(); dcol++)
       dst++->clear(*current_style_);
   }
-  if (scroll_window_set()) return;
+  if (scroll_region_set()) return;
   clear_mouse_selection();
 }
 
@@ -2333,7 +2334,7 @@ void Fl_Terminal::delete_rows(int count) {
     for (int dcol=0; dcol<disp_cols(); dcol++)
       dst++->clear(*current_style_);
   }
-  if (scroll_window_set()) return;
+  if (scroll_region_set()) return;
   clear_mouse_selection();
 }
 
@@ -2440,10 +2441,10 @@ void Fl_Terminal::clear_history(void) {
 void Fl_Terminal::reset_modes(void) {
   //DEBUG fprintf(stderr, "reset_modes (alternate_buffer_=%d)\n", alternate_buffer_);
   if (alternate_buffer_) {
-    toggle_alternate_buffer(false);
+    toggle_alternate_buffer(false); // NOTE: resets alternate_buffer_
   }
+  set_scroll_region(0, 0);          // clear a set scroll region
   line_graphics_ = false;
-  alternate_buffer_ = false;
   DECCKM_ = false;
   cursor_visible_ = true;
   insert_mode_ = false;
@@ -2465,13 +2466,19 @@ void Fl_Terminal::reset_modes(void) {
   mouse selection, homes cursor, resets tabstops. Same as \c "<ESC>c"
 */
 void Fl_Terminal::reset_terminal(void) {
+  int cols = w_to_col(scrn_.w());
+  int rows = h_to_row(scrn_.h());
+  int hrows = history_lines();
+  //DEBUG fprintf(stderr, "scrn: %d x %d => %d x %d / %d x %d\n", scrn_.w(), scrn_.h(), cols, rows, disp_cols(), disp_rows());
   reset_modes();
   current_style_->sgr_reset();        // reset current style
   clear_screen_home();                // clear screen, home cursor
   clear_history();
   clear_mouse_selection();
+  create_ring(rows, cols, hrows);     // adapt terminal size to screen size
   default_tabstops();                 // reset tabstops to default 8 char
-  reset();                            // let derived classes reset things
+  size(w(), h());                     // IMPORTANT: tell bash the new disp_rows(), disp_cols()!
+  reset();                            // finally let derived classes reset things, if needed
 }
 
 //DEBUG void Fl_Terminal::RingBuffer::show_ring_info(void) const {
@@ -3063,10 +3070,10 @@ void Fl_Terminal::toggle_alternate_buffer(bool on) {
   static RingBuffer saved_ring;
   static CharStyle saved_char_style;
   static Cursor saved_cursor;
-  if (on) {
+  alternate_buffer_ = on;
+  if (alternate_buffer_) {
     // Switch to alternate buffer
     //DEBUG fprintf(stderr, "Use alternate buffer\n");
-    alternate_buffer_ = true;
     saved_ring = ring_;
     saved_char_style = *current_style_;
     saved_cursor = cursor_;
@@ -3074,7 +3081,6 @@ void Fl_Terminal::toggle_alternate_buffer(bool on) {
   } else {
     // Return from alternate buffer
     //DEBUG fprintf(stderr, "Exit alternate buffer\n");
-    alternate_buffer_ = false;
     ring_ = saved_ring;
     *current_style_ = saved_char_style;
     cursor_ = saved_cursor;
