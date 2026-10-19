@@ -4488,7 +4488,10 @@ int Fl_Terminal::handle(int e) {
       set_app_cursor();
       return 1;
     case FL_ENTER:
+      set_app_cursor();                          // change cursor on widget entry to insert cursor
+      return 1;
     case FL_LEAVE:
+      set_app_cursor(FL_CURSOR_DEFAULT);         // change cursor on widget leave to default
       return 1;
     case FL_FOCUS:
       Fl::focus(this); // needed for start_cursor() to go (is set anyway later by caller, if we return 1)
