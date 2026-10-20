@@ -3330,6 +3330,9 @@ cup:
         // DEBUG fprintf(stderr, "repeat char %.*s for %d times\n", last_char_.length(), last_char_.text_utf8(), val0);
         cursor_.col(cursor_.col() + repeat_char(last_char_.text_utf8(), last_char_.length(), val0));
         break;
+      case 'c':                                  // ESC[#c - request primary devive attributes
+        send_pty("\x1b[?61;1;21;22c");           // (that is the answer gnome terminal gives)
+        break;
       case 'd':
         cursor_.row(clamp(val0, 1, dw)-1);       // ESC[#d - (VPA) line pos absolute [row]
         break;
@@ -3353,6 +3356,24 @@ cup:
         }
         break;
       case 'm': handle_SGR();             break; // ESC[#m - set character attributes (SGR)
+      case 'n':                                  // ESC[#n - status report
+        //DEBUG fprintf(stderr, "ESC[%dn\n", val0);
+        switch (val0) {
+          case 5: {                              // ESC[5m - report ready
+            char buf[40];
+            snprintf(buf, sizeof(buf), "\x1b[0n"); // OK
+            send_pty(buf);
+            break;
+          }
+          case 6: {                              // ESC[6m - report cursor position
+            char buf[40];
+            snprintf(buf, sizeof(buf), "\x1b[%d;%dR", cursor_.row() + 1, cursor_.col() + 1);
+            send_pty(buf);
+            break;
+          }
+          default: goto not_implemented;
+        }
+        break;
       case 's': save_cursor();            break; // ESC[s - save cur pos (xterm+gnome)
       case 'u': restore_cursor();         break; // ESC[u - restore cur pos (xterm+gnome)
       case 'p':
