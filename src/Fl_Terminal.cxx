@@ -1786,6 +1786,8 @@ void Fl_Terminal::color(Fl_Color val) {
   Fl_Color c = fl_contrast(current_style_->defaultfgcolor(), current_style_->ctrstcolor());
   textfgcolor_default(Fl::get_color(c));
   redraw();
+  // notify application about terminal background color change
+  do_callback(this, nullptr, (Fl_Callback_Reason)2); // TODO: define callback reasons?
 }
 
 /**
@@ -3003,6 +3005,7 @@ void Fl_Terminal::handle_DECRARA(void) {
 /*static*/
 void Fl_Terminal::set_window_title_cb(void *d) {
   Fl_Terminal *term = static_cast<Fl_Terminal *>(d);
+  // notify application about window title change
   term->do_callback(term, (void *)term->window_title_.c_str(), (Fl_Callback_Reason)1); // TODO: define callback reasons?
 }
 

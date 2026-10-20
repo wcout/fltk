@@ -849,9 +849,10 @@ int main(int argc, char** argv) {
   Fl_Double_Window win(win_w, win_h, "FLTK Terminal");
   win.add(term); // no add the terminal to it
   win.resizable(term);
+  win.color(term.color());
 
   // Send inital terminal size to PTY after window was shown
-  term.resize(0, 0, win.w(), win.h()); // resize to full window size
+  term.resize(0, 0, win_w, win.h()); // resize to full window size
   win.end();
   win.show(/*argc, argv*/);
 
@@ -868,8 +869,13 @@ int main(int argc, char** argv) {
         term->window()->copy_label(window_title.c_str());
       }
       return;
+    } else if (reason == 2) { // background color changed
+      term->window()->color(term->color());
+      term->window()->redraw();
+      return;
     }
-    if (log_) {
+    // ANSI command not implemented
+    if (log_ && reason >= 900) {
       fprintf(logfile ? logfile : stderr, "Fl_Terminal NOT IMPLEMENTED (%d): ", reason);
       term->dump(buf, strlen(buf));
     }
