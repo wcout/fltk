@@ -67,7 +67,6 @@ public:
   void send_pty(const char *buf_) override;
   int handle(int event) override;
   void resize(int X, int Y, int W, int H) override;
-  void char_to_pixel_dimension(int columns_, int rows_, int &w_, int &h_);
   void command(const char *cmd_);
   void logging(int level_, FILE *logfile_ = stderr) {
     _log = level_;
@@ -697,17 +696,6 @@ void Fl_PTY_Terminal::resize(int X, int Y, int W, int H) {
   }
 }
 
-void Fl_PTY_Terminal::char_to_pixel_dimension(int columns_, int rows_, int &w_, int &h_) {
-  fl_font(textfont(), textsize());
-  int pxh = fl_height() * rows_;
-  int pxw = fl_width('X') * columns_;
-  int dw = Fl::box_dw(box()) + scrollbar->w();
-  int dh = Fl::box_dh(box());
-
-  w_ = pxw + dw + margin_left() + margin_right();
-  h_ = pxh + dh + margin_top() + margin_bottom();
-}
-
 void Fl_PTY_Terminal::command(const char *cmd_) {
   write_pty(cmd_, strlen(cmd_));
   write_pty("\n", 1);
@@ -717,6 +705,7 @@ void Fl_PTY_Terminal::command(const char *cmd_) {
 //
 //  FLTK-Term application
 //
+static const int BORDER = 0; // border between window and terminal widget
 static int log_ = 0;
 static int no_splash = 0;
 static FILE *logfile = nullptr;
@@ -836,23 +825,21 @@ int main(int argc, char** argv) {
   term.margin(2);
   term.logging(log_, logfile ? logfile : stderr);
   term.textsize(fontsize > 0 ? fontsize : 18);
-  term.color(color);
   term.hscrollbar_style(Fl_Terminal::SCROLLBAR_OFF);
   term.scrollbar_size(6);
   term.scrollbar->color(FL_WHITE, FL_RED);
 
   // calculate how the big the window must be for the terminal
-  int win_w, win_h;
-  term.char_to_pixel_dimension(columns, rows, win_w, win_h);
+  int term_w, term_h;
+  term.char_to_pixel_dimension(columns, rows, term_w, term_h);
 
   // create window in just the right size
-  Fl_Double_Window win(win_w, win_h, "FLTK Terminal");
-  win.add(term); // no add the terminal to it
+  Fl_Double_Window win(term_w + 2 * BORDER, term_h + 2 * BORDER, "FLTK Terminal");
+  win.add(term); // now add the terminal to it
   win.resizable(term);
-  win.color(term.color());
 
   // Send inital terminal size to PTY after window was shown
-  term.resize(0, 0, win_w, win.h()); // resize to full window size
+  term.resize(BORDER, BORDER, term_w, term_h); // resize to full window size
   win.end();
   win.show(/*argc, argv*/);
 
@@ -873,6 +860,9 @@ int main(int argc, char** argv) {
       term->window()->color(term->color());
       term->window()->redraw();
       return;
+    } else if (reason == 3) { // terminal size changed by reset
+      term->window()->size(term->w() + 2 * BORDER, term->h() + 2 * BORDER);
+      return;
     }
     // ANSI command not implemented
     if (log_ && reason >= 900) {
@@ -881,6 +871,7 @@ int main(int argc, char** argv) {
     }
   });
 
+  term.color(color); // change color AFTER setting callback
   if (history_lines >= 0) {
     term.history_lines(history_lines);
   }

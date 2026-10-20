@@ -1173,6 +1173,7 @@ public:
   void  display_rows(int val);
   int   display_columns(void) const;
   void  display_columns(int val);
+  void  char_to_pixel_dimension(int cols, int rows, int &W, int &H) const;
   // API: Box
   /// Sets the box type, updates terminal margins et al. Default is FL_DOWN_FRAME.
   ///

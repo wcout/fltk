@@ -2464,6 +2464,22 @@ void Fl_Terminal::reset_modes(void) {
 }
 
 /**
+  Calculates the pixel dimensions needed for the terminal to
+  enclose exactly \p cols x \p rows characters.
+
+  Returns the pixel values in \p W and \p H.
+*/
+void Fl_Terminal::char_to_pixel_dimension(int cols, int rows, int &W, int &H) const {
+  int pxw = cols * current_style_->charwidth();
+  int pxh = rows * current_style_->fontheight();
+  int dw = Fl::box_dw(box()) + (scrollbar && scrollbar->visible() ? scrollbar->w() : 0);
+  int dh = Fl::box_dh(box()) + (hscrollbar && hscrollbar->visible() ? hscrollbar->h() : 0);
+
+  W = pxw + dw + margin_left() + margin_right();
+  H = pxh + dh + margin_top() + margin_bottom();
+}
+
+/**
   Resets terminal to default colors, clears screen, history and
   mouse selection, homes cursor, resets tabstops. Same as \c "<ESC>c"
 */
@@ -2479,8 +2495,12 @@ void Fl_Terminal::reset_terminal(void) {
   clear_mouse_selection();
   create_ring(rows, cols, hrows);     // adapt terminal size to screen size
   default_tabstops();                 // reset tabstops to default 8 char
-  size(w(), h());                     // IMPORTANT: tell bash the new disp_rows(), disp_cols()!
+  if (callback()) {                   // check if attached to PTY terminal (NOTE: hackish??)
+    char_to_pixel_dimension(cols, rows, cols, rows); // align to character boundaries if on PTY
+  }
+  Fl_Group::size(cols, rows);         // IMPORTANT: tell bash the new disp_rows(), disp_cols()!
   reset();                            // finally let derived classes reset things, if needed
+  do_callback(this, nullptr, (Fl_Callback_Reason)3);
 }
 
 //DEBUG void Fl_Terminal::RingBuffer::show_ring_info(void) const {
