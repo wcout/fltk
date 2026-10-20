@@ -3003,7 +3003,7 @@ void Fl_Terminal::handle_DECRARA(void) {
 /*static*/
 void Fl_Terminal::set_window_title_cb(void *d) {
   Fl_Terminal *term = static_cast<Fl_Terminal *>(d);
-  if (term->window()) term->window()->copy_label(term->window_title_.c_str());
+  term->do_callback(term, (void *)term->window_title_.c_str(), (Fl_Callback_Reason)1); // TODO: define callback reasons?
 }
 
 /**

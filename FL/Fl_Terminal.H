@@ -910,7 +910,7 @@ private:
 protected:
   bool           alternate_buffer() const  { return alternate_buffer_; }
   bool           bracketed_paste() const  { return bracketed_paste_; }
-  std::string    window_title_;
+  std::string    window_title_;     // buffer to store window title set from OSC command
 
 protected:
   // Ring buffer management

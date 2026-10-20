@@ -859,9 +859,17 @@ int main(int argc, char** argv) {
 
   term.callback([](Fl_Widget *wgt_, void *d_) {
     const char *buf = (const char *)d_;
+    Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)wgt_;
+    int reason = Fl::callback_reason();
+    if (reason == 1) { // set window title
+      static std::string window_title;
+      if (window_title != buf) {
+        window_title = buf;
+        term->window()->copy_label(window_title.c_str());
+      }
+      return;
+    }
     if (log_) {
-      Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)wgt_;
-      int reason = Fl::callback_reason();
       fprintf(logfile ? logfile : stderr, "Fl_Terminal NOT IMPLEMENTED (%d): ", reason);
       term->dump(buf, strlen(buf));
     }
