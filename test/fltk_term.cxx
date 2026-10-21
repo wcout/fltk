@@ -56,6 +56,7 @@ private:
 #endif
   int handle_dnd(int event);
   int handle_paste(const std::string &text);
+  void snap_to_grid(void);
 protected:
   void write_pty(const char *buf_, size_t len_);
   bool init();
@@ -69,17 +70,25 @@ public:
   void resize(int X, int Y, int W, int H) override;
   void command(const char *cmd_);
   void logging(int level_, FILE *logfile_ = stderr) {
-    _log = level_;
-    _logfile = logfile_;
+    log_ = level_;
+    logfile_ = logfile_;
   }
   bool inited() const {
-    return _inited;
+    return inited_;
+  }
+  /**
+    Flag that toggles 'snap to character grid' after a resize
+    Initially false, because application must be prepared for that.
+  */
+  void snap(bool v) {
+    snap_ = v;
   }
 private:
-  int  _pty_master_fd  = -1;
-  bool _inited         = false;
-  int _log             = 0;
-  FILE *_logfile       = stderr;
+  int    pty_master_fd_ = -1;
+  bool   inited_        = false;
+  int    log_           = 0;
+  FILE * logfile_       = stderr;
+  bool   snap_          = false;
 #ifdef _WIN32
   HANDLE _hPipeInWrite = INVALID_HANDLE_VALUE;
   HANDLE _hPipeOutRead = INVALID_HANDLE_VALUE;
@@ -120,10 +129,10 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////
 Fl_PTY_Terminal::Fl_PTY_Terminal(int x_, int y_, int w_, int h_, const char* l_/* = nullptr*/) :
   Fl_Terminal(x_, y_, w_, h_, l_) {
-  _inited = init();
-  if (_inited) {
+  inited_ = init();
+  if (inited_) {
 #ifndef _WIN32
-    Fl::add_fd(_pty_master_fd, FL_READ, pty_read_callback, this);
+    Fl::add_fd(pty_master_fd_, FL_READ, pty_read_callback, this);
 #endif
   }
   reset();
@@ -152,8 +161,8 @@ Fl_PTY_Terminal::~Fl_PTY_Terminal() {
     CloseHandle(_hPipeOutRead);
   }
 #else
-  if (_pty_master_fd >= 0) {
-    ::close(_pty_master_fd);
+  if (pty_master_fd_ >= 0) {
+    ::close(pty_master_fd_);
   }
 #endif
 }
@@ -170,51 +179,51 @@ void Fl_PTY_Terminal::dump(const char *buf, size_t n) {
     unsigned int c = (unsigned char)buf[i];
     if (c == 27) {
       if (space) {
-        fprintf(_logfile, " ");
+        fprintf(logfile_, " ");
       }
-      fprintf(_logfile, "%s\\e%s", BOLD, OFF);
+      fprintf(logfile_, "%s\\e%s", BOLD, OFF);
       space = false;
     } else if (c >= ' ' && c <= 127) {
       if (space) {
-        fprintf(_logfile, " ");
+        fprintf(logfile_, " ");
       }
-      fprintf(_logfile, "%s%c%s", TEXT, c, OFF);
+      fprintf(logfile_, "%s%c%s", TEXT, c, OFF);
       space = false;
     } else {
       if (space) {
-        fprintf(_logfile, " ");
+        fprintf(logfile_, " ");
       }
       switch (c) {
         case '\r':
-          fprintf(_logfile, "%s\\r%s", CTRL, OFF);
+          fprintf(logfile_, "%s\\r%s", CTRL, OFF);
           break;
         case '\n':
-          fprintf(_logfile, "%s\\n%s", CTRL, OFF);
+          fprintf(logfile_, "%s\\n%s", CTRL, OFF);
           break;
         case '\a':
-          fprintf(_logfile, "%s\\a%s", CTRL, OFF);
+          fprintf(logfile_, "%s\\a%s", CTRL, OFF);
           break;
         case '\t':
-          fprintf(_logfile, "%s\\t%s", CTRL, OFF);
+          fprintf(logfile_, "%s\\t%s", CTRL, OFF);
           break;
         default:
-          fprintf(_logfile, "%s\\x%02X%s", HEX, (unsigned char)c, OFF);
+          fprintf(logfile_, "%s\\x%02X%s", HEX, (unsigned char)c, OFF);
       }
 //			space = true; // NOTE: not needed any more
     }
   }
-  fprintf(_logfile, "\n");
+  fprintf(logfile_, "\n");
 }
 
 void Fl_PTY_Terminal::write_pty(const char *buf_, size_t len_) {
-  if (_pty_master_fd != -1) {
+  if (pty_master_fd_ != -1) {
 #ifdef _WIN32
     DWORD bytes_written = 0;
     if (_hPipeInWrite != INVALID_HANDLE_VALUE) {
       WriteFile(_hPipeInWrite, buf_, (DWORD)len_, &bytes_written, nullptr);
     }
 #else
-    ssize_t bytes_written = ::write(_pty_master_fd, buf_, len_);
+    ssize_t bytes_written = ::write(pty_master_fd_, buf_, len_);
     if ((int)bytes_written != (int)len_) {
       fprintf(stderr, "Write error PTY: %d != %d\n", (int)bytes_written, (int)len_);
     }
@@ -306,7 +315,7 @@ bool Fl_PTY_Terminal::init() {
 
   CloseHandle(pi.hThread);
 
-  _pty_master_fd = 1; // dummy, for code unification
+  pty_master_fd_ = 1; // dummy, for code unification
 
   // Spawn background reader thread
   CreateThread(NULL, 0, ChildReaderThread, this, 0, NULL);
@@ -318,25 +327,25 @@ bool Fl_PTY_Terminal::init() {
 
 #else
   // Use POSIX PTY (macOS/Linux)
-  _pty_master_fd = ::posix_openpt(O_RDWR | O_CLOEXEC | O_NONBLOCK);
-  if (_pty_master_fd < 0) {
+  pty_master_fd_ = ::posix_openpt(O_RDWR | O_CLOEXEC | O_NONBLOCK);
+  if (pty_master_fd_ < 0) {
     return false;
   }
 
-  if (::grantpt(_pty_master_fd) < 0 || ::unlockpt(_pty_master_fd) < 0) {
-    ::close(_pty_master_fd);
+  if (::grantpt(pty_master_fd_) < 0 || ::unlockpt(pty_master_fd_) < 0) {
+    ::close(pty_master_fd_);
     return false;
   }
 
-  char* slave_name = ::ptsname(_pty_master_fd);
+  char* slave_name = ::ptsname(pty_master_fd_);
   if (!slave_name) {
-    ::close(_pty_master_fd);
+    ::close(pty_master_fd_);
     return false;
   }
 
   pid_t pid = ::fork();
   if (pid < 0) {
-    ::close(_pty_master_fd);
+    ::close(pty_master_fd_);
     return false;
   }
 
@@ -346,7 +355,7 @@ bool Fl_PTY_Terminal::init() {
     if (slave_fd < 0) {
       std::exit(1);
     }
-    ::close(_pty_master_fd);
+    ::close(pty_master_fd_);
 
 #ifdef TIOCSCTTY
     ::ioctl(slave_fd, TIOCSCTTY, 0);
@@ -370,7 +379,7 @@ bool Fl_PTY_Terminal::init() {
 
 void Fl_PTY_Terminal::quit() {
   append("\n--- shell process stopped ---\n");
-  window()->hide(); // shut down terminal
+  do_callback(this, nullptr, (Fl_Callback_Reason)99);
 }
 
 void Fl_PTY_Terminal::input(const std::string& buffer) {
@@ -381,8 +390,8 @@ void Fl_PTY_Terminal::input(const std::string& buffer) {
   size_t bytes_read = buffer.size();
   const char *buf = buffer.c_str();
   if (bytes_read > 0) {
-    if (_log > 1) {
-      fprintf(_logfile, "Send %d bytes to terminal:\n", (int)bytes_read);
+    if (log_ > 1) {
+      fprintf(logfile_, "Send %d bytes to terminal:\n", (int)bytes_read);
       dump(buf, bytes_read);
     }
     append_utf8(buf, bytes_read);
@@ -463,8 +472,8 @@ void Fl_PTY_Terminal::pty_read_callback(int fd_, void *data_) {
 
 void Fl_PTY_Terminal::send_pty(const char *buf_) {
   int len = strlen(buf_);
-  if (_log) {
-    fprintf(_logfile, "Terminal answer (%d bytes): ", len);
+  if (log_) {
+    fprintf(logfile_, "Terminal answer (%d bytes): ", len);
     dump(buf_, len);
   }
   write_pty(buf_, len);
@@ -498,7 +507,7 @@ int Fl_PTY_Terminal::handle_dnd(int event) {
 
 // Catch Keyboard strokes
 int Fl_PTY_Terminal::handle(int event) {
-  if (event == FL_KEYDOWN && _pty_master_fd != -1) {
+  if (event == FL_KEYDOWN && pty_master_fd_ != -1) {
     int key = Fl::event_key();
     int state = Fl::event_state();
 
@@ -600,9 +609,9 @@ int Fl_PTY_Terminal::handle(int event) {
     }
     if (key == FL_F + 11) {
       // toggle logging
-      _log++;
-      _log %= 3;
-      fprintf(_logfile, "logging: %d\n", _log);
+      log_++;
+      log_ %= 3;
+      fprintf(logfile_, "logging: %d\n", log_);
       return 1;
     }
     if (key == FL_F + 12) {
@@ -650,18 +659,40 @@ int Fl_PTY_Terminal::handle(int event) {
   return Fl_Terminal::handle(event);
 }
 
+// Is called after a resize and tries to change the
+// dimensions to full character sizes.
+void Fl_PTY_Terminal::snap_to_grid(void) {
+  int cols = w_to_col(scrn_.w());
+  int rows = h_to_row(scrn_.h());
+  resize_display_columns(cols);       // change columns to screen width
+  default_tabstops();                 // reset tabstops to default 8 char
+  int W = w();
+  int H = h();
+  char_to_pixel_dimension(cols, rows, W, H); // align to character boundaries if on PTY
+  if (W != w() || H != h()) {
+    Fl_Group::size(W, H);             // IMPORTANT: tell bash the new disp_rows(), disp_cols()!
+    do_callback(this, nullptr, (Fl_Callback_Reason)3);
+  }
+}
+
 // Catch GUI-Resize and pass it on to the Bash
 void Fl_PTY_Terminal::resize(int X, int Y, int W, int H) {
   // First let the base class change the GUI-Widget size
   Fl_Terminal::resize(X, Y, W, H);
+  if (snap_ && !window()->maximize_active()) { // 'snap to character grid' set?
+    Fl::add_timeout(0.1, [](void *d) {
+      Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)d;
+      term->snap_to_grid();
+    }, this);
+  }
 
   // Only change, when PTY is already active
-  if (_pty_master_fd != -1) {
+  if (pty_master_fd_ != -1) {
     // Calculate columns and rows for current size
     int columns = display_columns();
     int rows    = display_rows();
-    if (_log) {
-      fprintf(_logfile, "resized to: %d x %d\n", columns, rows);
+    if (log_) {
+      fprintf(logfile_, "resized to: %d x %d\n", columns, rows);
     }
 
     // Prevent invalid values by extreme minimize
@@ -681,7 +712,7 @@ void Fl_PTY_Terminal::resize(int X, int Y, int W, int H) {
     }
 #endif // HAS_PSEUDO_CONSOLE
 #else
-    if (_pty_master_fd >= 0) {
+    if (pty_master_fd_ >= 0) {
       // Fill OS structure for terminal size
       struct winsize ws;
       ws.ws_col = static_cast<unsigned short>(columns);
@@ -690,7 +721,7 @@ void Fl_PTY_Terminal::resize(int X, int Y, int W, int H) {
       ws.ws_ypixel = static_cast<unsigned short>(H);
 
       // Signal to pseudoterminal (and shell) the new size
-      ioctl(_pty_master_fd, TIOCSWINSZ, &ws);
+      ioctl(pty_master_fd_, TIOCSWINSZ, &ws);
     }
 #endif
   }
@@ -823,6 +854,7 @@ int main(int argc, char** argv) {
   }
   term.box(FL_FLAT_BOX);
   term.margin(2);
+  term.snap(true); // allow 'snap to character grid'
   term.logging(log_, logfile ? logfile : stderr);
   term.textsize(fontsize > 0 ? fontsize : 18);
   term.hscrollbar_style(Fl_Terminal::SCROLLBAR_OFF);
@@ -863,9 +895,12 @@ int main(int argc, char** argv) {
     } else if (reason == 3) { // terminal size changed by reset
       term->window()->size(term->w() + 2 * BORDER, term->h() + 2 * BORDER);
       return;
+    } else if (reason == 99) { // quit
+      term->window()->hide();
+      return;
     }
     // ANSI command not implemented
-    if (log_ && reason >= 900) {
+    if (log_ && buf && reason >= 900) {
       fprintf(logfile ? logfile : stderr, "Fl_Terminal NOT IMPLEMENTED (%d): ", reason);
       term->dump(buf, strlen(buf));
     }

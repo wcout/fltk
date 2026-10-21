@@ -885,7 +885,6 @@ private:
   bool           show_unknown_;     // if true, show unknown chars as '¿' (default off)
   bool           ansi_;             // if true, parse ansi codes (default on)
   std::vector<bool> tabstops_;      // array of tab stops (0|1)
-  Fl_Rect        scrn_;             // terminal screen xywh inside box(), margins, and scrollbar
   int            autoscroll_dir_;   // 0=autoscroll timer off, 3=scrolling up, 4=scrolling down
   int            autoscroll_amt_;   // #pixels above or below edge, used for autoscroll speed
   RedrawStyle    redraw_style_;     // NO_REDRAW, RATE_LIMITED, PER_WRITE
@@ -911,6 +910,7 @@ protected:
   bool           alternate_buffer() const  { return alternate_buffer_; }
   bool           bracketed_paste() const  { return bracketed_paste_; }
   std::string    window_title_;     // buffer to store window title set from OSC command
+  Fl_Rect        scrn_;             // terminal screen xywh inside box(), margins, and scrollbar
 
 protected:
   // Ring buffer management
@@ -926,7 +926,7 @@ protected:
   Utf8Char* u8c_hist_use_row(int hurow);
   Utf8Char* u8c_disp_row(int drow);
   Utf8Char* u8c_cursor(void);
-private:
+protected:
   void create_ring(int drows, int dcols, int hrows);
   void init_(int X,int Y,int W,int H,const char*L,int rows,int cols,int hist,bool fontsize_defer);
   // Tabstops
@@ -944,6 +944,7 @@ private:
   void resize_display_rows(int drows);
   void resize_display_columns(int dcols);
   void refit_disp_to_screen(void);
+private:
   // Callbacks
   static void scrollbar_cb(Fl_Widget*, void*);    // scrollbar manipulation
   static void autoscroll_timer_cb(void*);         // mouse drag autoscroll

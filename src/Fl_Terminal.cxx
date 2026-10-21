@@ -2495,13 +2495,7 @@ void Fl_Terminal::reset_terminal(void) {
   clear_mouse_selection();
   create_ring(rows, cols, hrows);     // adapt terminal size to screen size
   default_tabstops();                 // reset tabstops to default 8 char
-  int W = w();
-  int H = h();
-  if (callback() &&                   // check if attached to PTY terminal (NOTE: hackish??)
-      callback() != &Fl_Widget::default_callback) {
-    char_to_pixel_dimension(cols, rows, W, H); // align to character boundaries if on PTY
-  }
-  Fl_Group::size(W, H);               // IMPORTANT: tell bash the new disp_rows(), disp_cols()!
+  Fl_Group::size(w(), h());           // IMPORTANT: tell bash the new disp_rows(), disp_cols()!
   reset();                            // finally let derived classes reset things, if needed
   do_callback(this, nullptr, (Fl_Callback_Reason)3);
 }
