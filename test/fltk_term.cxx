@@ -47,12 +47,12 @@ public:
   enum Fl_PTY_Terminal_Callback_Reason {
     FL_REASON_PTY_STOPPED = FL_REASON_TERM_USER
   };
-  Fl_PTY_Terminal(int x_, int y_, int w_, int h_, const char* l_ = nullptr);
+  Fl_PTY_Terminal(int x, int y, int w, int h, const char* l = nullptr);
   ~Fl_PTY_Terminal();
 #ifndef _WIN32
 private:
   void onRead(int fd_, void *data_);
-  static void pty_read_callback(int fd_, void *data_);
+  static void pty_read_callback(int fd_, void *data);
 #else
   static DWORD WINAPI ChildReaderThread(LPVOID lpParam);
   static VOID CALLBACK WaitCallback(PVOID lpParameter, BOOLEAN TimerOrWaitFired);
@@ -61,7 +61,7 @@ private:
   int handle_paste(const std::string &text);
   void snap_to_grid(void);
 protected:
-  void write_pty(const char *buf_, size_t len_);
+  void write_pty(const char *buf_, size_t len);
   bool init();
   void quit();
   void reset() override;
@@ -72,9 +72,9 @@ public:
   int handle(int event) override;
   void resize(int X, int Y, int W, int H) override;
   void command(const char *cmd_);
-  void logging(int level_, FILE *logfile_ = stderr) {
-    log_ = level_;
-    logfile_ = logfile_;
+  void logging(int level, FILE *logfile = stderr) {
+    log_ = level;
+    logfile_ = logfile;
   }
   bool inited() const {
     return inited_;
@@ -130,8 +130,8 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////
 //  PTY terminal class with resize logic implementation
 ////////////////////////////////////////////////////////////////////////////////////////////////
-Fl_PTY_Terminal::Fl_PTY_Terminal(int x_, int y_, int w_, int h_, const char* l_/* = nullptr*/) :
-  Fl_Terminal(x_, y_, w_, h_, l_) {
+Fl_PTY_Terminal::Fl_PTY_Terminal(int x, int y, int w, int h, const char* l/* = nullptr*/) :
+  Fl_Terminal(x, y, w, h, l) {
   inited_ = init();
   if (inited_) {
 #ifndef _WIN32
@@ -218,17 +218,17 @@ void Fl_PTY_Terminal::dump(const char *buf, size_t n) {
   fprintf(logfile_, "\n");
 }
 
-void Fl_PTY_Terminal::write_pty(const char *buf_, size_t len_) {
+void Fl_PTY_Terminal::write_pty(const char *buf, size_t len) {
   if (pty_master_fd_ != -1) {
 #ifdef _WIN32
     DWORD bytes_written = 0;
     if (_hPipeInWrite != INVALID_HANDLE_VALUE) {
-      WriteFile(_hPipeInWrite, buf_, (DWORD)len_, &bytes_written, nullptr);
+      WriteFile(_hPipeInWrite, buf, (DWORD)len, &bytes_written, nullptr);
     }
 #else
-    ssize_t bytes_written = ::write(pty_master_fd_, buf_, len_);
-    if ((int)bytes_written != (int)len_) {
-      fprintf(stderr, "Write error PTY: %d != %d\n", (int)bytes_written, (int)len_);
+    ssize_t bytes_written = ::write(pty_master_fd_, buf, len);
+    if ((int)bytes_written != (int)len) {
+      fprintf(stderr, "Write error PTY: %d != %d\n", (int)bytes_written, (int)len);
     }
 #endif
   }
@@ -467,19 +467,19 @@ void Fl_PTY_Terminal::onRead(int fd_, void *data_) {
 
 // Linux pty fd callback
 /*static*/
-void Fl_PTY_Terminal::pty_read_callback(int fd_, void *data_) {
-  Fl_PTY_Terminal* terminal = static_cast<Fl_PTY_Terminal*>(data_);
-  terminal->onRead(fd_, data_);
+void Fl_PTY_Terminal::pty_read_callback(int fd, void *data) {
+  Fl_PTY_Terminal* terminal = static_cast<Fl_PTY_Terminal*>(data);
+  terminal->onRead(fd, data);
 }
 #endif
 
-void Fl_PTY_Terminal::send_pty(const char *buf_) {
-  int len = strlen(buf_);
+void Fl_PTY_Terminal::send_pty(const char *buf) {
+  int len = strlen(buf);
   if (log_) {
     fprintf(logfile_, "Terminal answer (%d bytes): ", len);
-    dump(buf_, len);
+    dump(buf, len);
   }
-  write_pty(buf_, len);
+  write_pty(buf, len);
 }
 
 int Fl_PTY_Terminal::handle_paste(const std::string &text) {
@@ -728,8 +728,8 @@ void Fl_PTY_Terminal::resize(int X, int Y, int W, int H) {
   }
 }
 
-void Fl_PTY_Terminal::command(const char *cmd_) {
-  write_pty(cmd_, strlen(cmd_));
+void Fl_PTY_Terminal::command(const char *cmd) {
+  write_pty(cmd, strlen(cmd));
   write_pty("\n", 1);
 }
 // --snip--✂----------------Fl_PTY_Terminal.cxx-----------------------------
@@ -750,16 +750,16 @@ static int fontsize = 0;
 static std::string cmd; // initial command (none)
 
 void parse_command_line(int argc, char *argv[]) {
-  auto geometry = [&](const std::string &s_, int &w_, int &h_) ->void {
-    size_t pos = s_.find('x');
+  auto geometry = [&](const std::string &s, int &W, int &H) ->void {
+    size_t pos = s.find('x');
     if (pos == std::string::npos) {
       return;
     }
-    int w = atoi(s_.substr(0, pos).c_str());
-    int h = atoi(s_.substr(pos + 1).c_str());
+    int w = atoi(s.substr(0, pos).c_str());
+    int h = atoi(s.substr(pos + 1).c_str());
     if (w > 10 && w <= 132 && h > 10 && h <= 50) {
-      w_ = w;
-      h_ = h;
+      W = w;
+      H = h;
     }
   };
   auto set_font =[&](const char *font) ->int {
@@ -818,7 +818,7 @@ void parse_command_line(int argc, char *argv[]) {
             }
             break;
           case 'g':
-            geometry(argv[i++], columns, rows);
+            geometry(argv[++i], columns, rows);
             break;
           case 'F':
             fontsize = set_font(argv[++i]);
@@ -878,9 +878,9 @@ int main(int argc, char** argv) {
 
   ::printf("PTTY %d x %d\n", term.display_columns(), term.display_rows());
 
-  term.callback([](Fl_Widget *wgt_, void *d_) {
-    const char *buf = (const char *)d_;
-    Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)wgt_;
+  term.callback([](Fl_Widget *wgt, void *d) {
+    const char *buf = (const char *)d;
+    Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)wgt;
     int reason = Fl::callback_reason();
     switch (reason) {
       case Fl_Terminal::FL_REASON_TITLE_CHANGE: {  // window title has changed
@@ -923,8 +923,8 @@ int main(int argc, char** argv) {
     ;
   }
   if (cmd.size()) {
-    Fl::add_timeout(0., [](void *d_) {
-      Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)d_;
+    Fl::add_timeout(0., [](void *d) {
+      Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)d;
       term->command(cmd.c_str());
     }, terminal);
   }
