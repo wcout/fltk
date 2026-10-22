@@ -1787,7 +1787,7 @@ void Fl_Terminal::color(Fl_Color val) {
   textfgcolor_default(Fl::get_color(c));
   redraw();
   // notify application about terminal background color change
-  do_callback(this, nullptr, (Fl_Callback_Reason)2); // TODO: define callback reasons?
+  do_callback(this, nullptr, (Fl_Callback_Reason)FL_REASON_COLOR_CHANGE);
 }
 
 /**
@@ -2497,7 +2497,7 @@ void Fl_Terminal::reset_terminal(void) {
   default_tabstops();                 // reset tabstops to default 8 char
   Fl_Group::size(w(), h());           // IMPORTANT: tell bash the new disp_rows(), disp_cols()!
   reset();                            // finally let derived classes reset things, if needed
-  do_callback(this, nullptr, (Fl_Callback_Reason)3);
+  do_callback(this, nullptr, (Fl_Callback_Reason)FL_REASON_SIZE_CHANGE);
 }
 
 //DEBUG void Fl_Terminal::RingBuffer::show_ring_info(void) const {
@@ -2999,7 +2999,7 @@ void Fl_Terminal::handle_SGR(void) {     // ESC[...m?
   }
   if (!rgbmode) return;                                  // RGB sequence complete?
 not_implemented:
-  do_callback(this, (void *)escseq.buf().c_str(), (Fl_Callback_Reason)998);
+  do_callback(this, (void *)escseq.buf().c_str(), (Fl_Callback_Reason)FL_REASON_NOT_IMPL_SGR);
   escseq.reset();
   handle_unknown_char();
   return;
@@ -3023,7 +3023,7 @@ void Fl_Terminal::handle_DECRARA(void) {
 void Fl_Terminal::set_window_title_cb(void *d) {
   Fl_Terminal *term = static_cast<Fl_Terminal *>(d);
   // notify application about window title change
-  term->do_callback(term, (void *)term->window_title_.c_str(), (Fl_Callback_Reason)1); // TODO: define callback reasons?
+  term->do_callback(term, (void *)term->window_title_.c_str(), (Fl_Callback_Reason)FL_REASON_TITLE_CHANGE);
 }
 
 /**
@@ -3200,7 +3200,7 @@ void Fl_Terminal::handle_escseq(char c) {
         if (!handle_private_mode(escseq.val(i), mode)) {
           char buf[40];
           snprintf(buf, sizeof(buf), "\x1b[?%d%c", escseq.val(i), mode);
-          do_callback(this, (void *)buf, (Fl_Callback_Reason)997);
+          do_callback(this, (void *)buf, (Fl_Callback_Reason)FL_REASON_NOT_IMPL_PRIV);
         }
       }
       return;
@@ -3419,7 +3419,7 @@ cup:
       case '>': break;
       default:
 not_implemented:
-        do_callback(this, (void *)escseq.buf().c_str(), (Fl_Callback_Reason)999);
+        do_callback(this, (void *)escseq.buf().c_str(), (Fl_Callback_Reason)FL_REASON_NOT_IMPL_ESC);
         escseq.reset();
         handle_unknown_char();
         return;

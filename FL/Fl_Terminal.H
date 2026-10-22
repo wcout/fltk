@@ -398,6 +398,23 @@ public:
     SCROLLBAR_ON   = 0x02  ///< scrollbar always visible
   };
 
+  /**
+    \enum Callback Reasons
+    Callback reasons the Fl_Terminal class sends
+  */
+  enum Fl_Termimal_Callback_Reason {
+    FL_REASON_TITLE_CHANGE = ///< window title changed
+      FL_REASON_USER,
+    FL_REASON_COLOR_CHANGE,  ///< background color changed
+    FL_REASON_SIZE_CHANGE,   ///< terminal dimensions changed
+    FL_REASON_NOT_IMPL,      ///< not implemented command (base)
+    FL_REASON_NOT_IMPL_SGR,  ///< not implemented SGR command
+    FL_REASON_NOT_IMPL_PRIV, ///< not implemented private mode command
+    FL_REASON_NOT_IMPL_ESC,  ///< not implemented ESC sequence
+    FL_REASON_TERM_USER =    ///< terminal user defined callback reasons
+      FL_REASON_TITLE_CHANGE + 32
+  };
+
   ///////////////////////////////////////////////////////////////
   //////
   ////// Fl_Terminal Protected Classes

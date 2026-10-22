@@ -44,6 +44,9 @@ DECLARE_HANDLE(HPCON);
 // PTY terminal class with resize logic
 class Fl_PTY_Terminal : public Fl_Terminal {
 public:
+  enum Fl_PTY_Terminal_Callback_Reason {
+    FL_REASON_PTY_STOPPED = FL_REASON_TERM_USER
+  };
   Fl_PTY_Terminal(int x_, int y_, int w_, int h_, const char* l_ = nullptr);
   ~Fl_PTY_Terminal();
 #ifndef _WIN32
@@ -379,7 +382,7 @@ bool Fl_PTY_Terminal::init() {
 
 void Fl_PTY_Terminal::quit() {
   append("\n--- shell process stopped ---\n");
-  do_callback(this, nullptr, (Fl_Callback_Reason)99);
+  do_callback(this, nullptr, (Fl_Callback_Reason)FL_REASON_PTY_STOPPED);
 }
 
 void Fl_PTY_Terminal::input(const std::string& buffer) {
@@ -586,11 +589,9 @@ int Fl_PTY_Terminal::handle(int event) {
       return 1;
     }
     if (key == FL_End) {
-//				write_pty("\033[4~", 4); // ANSI Escape-Code for End key
       if (state & FL_CTRL) {
         write_pty("\033[1;5F", 6); // ANSI Escape-Code for End key
       } else {
-//					write_pty("\033[4~", 4); // ANSI Escape-Code for End key
         write_pty("\033[F", 3); // ANSI Escape-Code for End key
       }
       return 1;
@@ -671,7 +672,7 @@ void Fl_PTY_Terminal::snap_to_grid(void) {
   char_to_pixel_dimension(cols, rows, W, H); // align to character boundaries if on PTY
   if (W != w() || H != h()) {
     Fl_Group::size(W, H);             // IMPORTANT: tell bash the new disp_rows(), disp_cols()!
-    do_callback(this, nullptr, (Fl_Callback_Reason)3);
+    do_callback(this, nullptr, (Fl_Callback_Reason)Fl_Terminal::FL_REASON_SIZE_CHANGE);
   }
 }
 
@@ -881,28 +882,30 @@ int main(int argc, char** argv) {
     const char *buf = (const char *)d_;
     Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)wgt_;
     int reason = Fl::callback_reason();
-    if (reason == 1) { // set window title
-      static std::string window_title;
-      if (window_title != buf) {
-        window_title = buf;
-        term->window()->copy_label(window_title.c_str());
+    switch (reason) {
+      case Fl_Terminal::FL_REASON_TITLE_CHANGE: {  // window title has changed
+        static std::string window_title;
+        if (window_title != buf) {
+          window_title = buf;
+          term->window()->copy_label(window_title.c_str());
+        }
+        return;
       }
-      return;
-    } else if (reason == 2) { // background color changed
-      term->window()->color(term->color());
-      term->window()->redraw();
-      return;
-    } else if (reason == 3) { // terminal size changed by reset
-      term->window()->size(term->w() + 2 * BORDER, term->h() + 2 * BORDER);
-      return;
-    } else if (reason == 99) { // quit
-      term->window()->hide();
-      return;
-    }
-    // ANSI command not implemented
-    if (log_ && buf && reason >= 900) {
-      fprintf(logfile ? logfile : stderr, "Fl_Terminal NOT IMPLEMENTED (%d): ", reason);
-      term->dump(buf, strlen(buf));
+      case Fl_Terminal::FL_REASON_COLOR_CHANGE:    // background color changed
+        term->window()->color(term->color());
+        term->window()->redraw();
+        return;
+      case Fl_Terminal::FL_REASON_SIZE_CHANGE:     // terminal size changed by reset
+        term->window()->size(term->w() + 2 * BORDER, term->h() + 2 * BORDER);
+        return;
+      case Fl_PTY_Terminal::FL_REASON_PTY_STOPPED: // bash quitted
+        term->window()->hide();
+        return;
+      default:                                     // ANSI command not implemented
+        if (log_ && buf && reason >= Fl_Terminal::FL_REASON_NOT_IMPL) {
+           fprintf(logfile ? logfile : stderr, "Fl_Terminal NOT IMPLEMENTED (%d): ", reason);
+         term->dump(buf, strlen(buf));
+        }
     }
   });
 
