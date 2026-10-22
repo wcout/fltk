@@ -4574,6 +4574,10 @@ int Fl_Terminal::handle(int e) {
       break;
     case FL_PUSH:
       if (handle(FL_FOCUS)) Fl::focus(this);              // Accepting focus? take it
+      if (Fl::event_button() == FL_MIDDLE_MOUSE && !mouse_mode_) {
+        Fl::paste(*this, 0, Fl::clipboard_plain_text);
+        return 1;
+      }
       if (Fl::event_button() == FL_LEFT_MOUSE || mouse_mode_)            // LEFT-CLICK?
         { ret = handle_selection(FL_PUSH); }
       break;
