@@ -76,16 +76,13 @@ public:
     log_ = level;
     logfile_ = logfile;
   }
-  bool inited() const {
-    return inited_;
-  }
+  bool inited() const { return inited_; }
   /**
     Flag that toggles 'snap to character grid' after a resize
     Initially false, because application must be prepared for that.
   */
-  void snap(bool v) {
-    snap_ = v;
-  }
+  void snap(bool v) { snap_ = v; }
+  static void snap_to_grid_cb(void *d);
 private:
   int    pty_master_fd_ = -1;
   bool   inited_        = false;
@@ -148,6 +145,7 @@ void Fl_PTY_Terminal::reset() {
 }
 
 Fl_PTY_Terminal::~Fl_PTY_Terminal() {
+  Fl::remove_timeout(snap_to_grid_cb, this);
 #ifdef _WIN32
 #if HAS_PSEUDO_CONSOLE
   if (_hPC) {
@@ -676,15 +674,20 @@ void Fl_PTY_Terminal::snap_to_grid(void) {
   }
 }
 
+// trigger resize to character boundaries
+/*static*/
+void Fl_PTY_Terminal::snap_to_grid_cb(void *d) {
+  Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)d;
+  term->snap_to_grid();
+}
+
 // Catch GUI-Resize and pass it on to the Bash
 void Fl_PTY_Terminal::resize(int X, int Y, int W, int H) {
   // First let the base class change the GUI-Widget size
   Fl_Terminal::resize(X, Y, W, H);
   if (snap_ && !window()->maximize_active()) { // 'snap to character grid' set?
-    Fl::add_timeout(0.1, [](void *d) {
-      Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)d;
-      term->snap_to_grid();
-    }, this);
+    Fl::remove_timeout(snap_to_grid_cb, this);
+    Fl::add_timeout(0.1, snap_to_grid_cb, this);
   }
 
   // Only change, when PTY is already active
