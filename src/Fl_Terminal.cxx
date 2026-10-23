@@ -123,7 +123,7 @@ Fl_Color Fl_Terminal::CharStyle::fltk_bg_color(uchar ci) {
   };
 // NOTE: dead code???
 //  if (ci==39 || ci==49) ::printf("fltk_bg_color(%d)\n", ci);
-//  if (ci==39) defaultfgcolor_;   // special case for 'reset' color
+//  if (ci==39) return defaultfgcolor_;   // special case for 'reset' color
 //  if (ci==49) return defaultbgcolor_;   // special case for 'reset' color
   ci &= 0x07;         // clamp to array size
   return xterm_bg_colors_[ci];
@@ -4044,6 +4044,7 @@ Fl_Terminal::~Fl_Terminal(void) {
   if (redraw_timer_)
     { Fl::remove_timeout(redraw_timer_cb, this); redraw_timer_ = false; }
   Fl::remove_timeout(set_window_title_cb, this);
+  Fl::remove_timeout(cursor_blink, this);
   delete current_style_;
 }
 
