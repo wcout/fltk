@@ -2837,6 +2837,7 @@ Fl_Terminal::OutFlags Fl_Terminal::output_translate(void) const {
 */
 void Fl_Terminal::handle_ctrl(char c) {
   switch (c) {
+    case 0:                                return;  // ignore \000
     case '\b': cursor_left();              return;  // BS?
     case '\r': handle_cr();                return;  // CR?
     case '\n': handle_lf();                return;  // LF?

@@ -454,7 +454,7 @@ void Fl_PTY_Terminal::onRead(int fd_, void *data_) {
 
   if (bytes_read > 0) {
     buffer[bytes_read] = '\0';
-    input(std::string(buffer));
+    input(std::string(buffer, bytes_read));
   }
 
   if (!process_alive) {
