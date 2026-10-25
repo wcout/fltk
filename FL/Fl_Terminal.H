@@ -788,9 +788,8 @@ private:
     char *valbuffp_;                  // pointer to first char in buff_ of integer being parsed
     int   save_row_, save_col_;       // used by ESC[s/u for save/restore
 
-    inline int append_buff(char c) {
+    inline void append_buff(char c) {
       buff_.push_back(c);
-      return success;
     }
     int append_val(void);
 

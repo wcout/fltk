@@ -385,7 +385,7 @@ int Fl_Terminal::EscapeSeq::parse(char c) {
   } else if (c == 0x1b) {                   // ESC at ANY time resets class/begins new ESC sequence
     reset();
     esc_mode(0x1b);
-    if (append_buff(c) < 0) goto pfail;     // save ESC in buf
+    append_buff(c);                         // save ESC in buf
     return success;
   } else if (esc_mode() == ']' && c == '\007') {
     return completed;                       // in OSC mode \007 is the end marker
@@ -403,26 +403,26 @@ int Fl_Terminal::EscapeSeq::parse(char c) {
     if (c == ']') {                         // <ESC>] OSC sequence?
       esc_mode(c);                          // this is an OSC command
       csi_      = false;                    // not a CSI sequence
-      if (append_buff(c) < 0) goto pfail;   // save ']' in buf
+      append_buff(c);                       // save ']' in buf
       return success;                       // success
     } else if (c == '[') {                  // <ESC>[? CSI (Ctrl Seq Introducer)
       esc_mode(c);                          // switch to parsing mode for ESC[#;#;#..
       csi_      = true;                     // this is now a CSI sequence
       valbuffp_ = nullptr;                  // valbuffp NULL (no vals yet)
-      if (append_buff(c) < 0) goto pfail;   // save '[' in buf
+      append_buff(c);                       // save '[' in buf
       return success;                       // success
     } else if ((c >= '@' && c <= 'Z') ||    // C1 control code (e.g. <ESC>D, <ESC>c, etc)
                (c >= 'a' && c <= 'z')) {
       esc_mode(c);                          // save op in esc_mode() for caller to see
       csi_      = false;                    // NOT a CSI sequence
       valbuffp_ = nullptr;                  // valbuffp NULL (no vals yet)
-      if (append_buff(c) < 0) goto pfail;   // save op in buf
+      append_buff(c);                       // save op in buf
       return completed;                     // completed sequence
     } else if (c == '(' || c == ')') {      // ESCx?
       esc_mode(c);
       csi_     = false;
       valbuffp_ = nullptr;
-      if (append_buff(c) < 0) goto pfail;   // save op in buf
+      append_buff(c);                       // save op in buf
       return success;
     } else {
       goto pfail;                           // not supported
@@ -431,7 +431,7 @@ int Fl_Terminal::EscapeSeq::parse(char c) {
 //    if (c == '\007') {                    // NOTE: completion is handled above
 //      return completed;                   // because otherwise filtered away!
 //    }
-    if (append_buff(c) < 0) goto pfail;
+    append_buff(c);
     return success;
   } else if (esc_mode() == '[') {           // '[' mode? e.g. ESC[... aka. is_csi()
     if (c == ' ' &&
@@ -439,27 +439,27 @@ int Fl_Terminal::EscapeSeq::parse(char c) {
          buff_.size() == 3))
       return success;
     if ((c == '!' || c == '?' || c == '<') && buff_.size() == 2) { // '<' is from mouse ESC[<...M/m mouse report
-      if (append_buff(c) < 0) goto pfail;   // '!' ESC[! commands (like ESC[!p soft reset)
+      append_buff(c);                       // '!' ESC[! commands (like ESC[!p soft reset)
       return success;
     }
     else if (c == '>' && buff_.size() == 2) {
-      if (append_buff(c) < 0) goto pfail;
+      append_buff(c);
       return success;
     }
     if (c == ';') {                         // ';' indicates end of a value, e.g. ESC[0;2..
-      if (append_val()   < 0) goto pfail;   // append value parsed so far, vali gets inc'ed
-      if (append_buff(c) < 0) goto pfail;   // save ';' in buf
+      if (append_val() < 0) goto pfail;     // append value parsed so far, vali gets inc'ed
+      append_buff(c);                       // save ';' in buf
       return success;
     }
     if (c >= '0' && c <= '9') {             // parsing an integer?
       if (!valbuffp_)                       // valbuffp not set yet?
         { valbuffp_ = &buff_.back() + 1; }  // point to first char in integer string
-      if (append_buff(c) < 0) goto pfail;   // add value to buffer
+      append_buff(c);                       // add value to buffer
       return success;
     }
     // Not a ; or digit? fall thru to [A-Z,a-z] check
   } else if (esc_mode() == '(' || esc_mode() == ')') {
-      if (append_buff(c) < 0) goto pfail;
+      append_buff(c);
       return completed;
     } else {                                // all other esc_mode() chars are fail/unknown
     goto pfail;
@@ -467,7 +467,7 @@ int Fl_Terminal::EscapeSeq::parse(char c) {
   if (( c >= '@' && c<= 'Z') ||             // ESC#X or ESC[...X, where X is [A-Z,a-z]?
       ( c >= 'a' && c<= 'z')) {
     if (append_val() < 0 ) goto pfail;      // append any trailing vals just before letter
-    if (append_buff(c) < 0 ) goto pfail;    // save letter in buffer
+    append_buff(c);                         // save letter in buffer
     esc_mode(c);                            // change mode to the mode setting char
     return completed;                       // completed/done
   }
