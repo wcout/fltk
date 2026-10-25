@@ -452,9 +452,9 @@ int Fl_Terminal::EscapeSeq::parse(char c) {
       return success;
     }
     if (c >= '0' && c <= '9') {             // parsing an integer?
-      if (!valbuffp_)                       // valbuffp not set yet?
-        { valbuffp_ = &buff_.back() + 1; }  // point to first char in integer string
       append_buff(c);                       // add value to buffer
+      if (!valbuffp_)                       // valbuffp not set yet?
+        { valbuffp_ = &buff_.back(); }      // point to first char in integer string
       return success;
     }
     // Not a ; or digit? fall thru to [A-Z,a-z] check
