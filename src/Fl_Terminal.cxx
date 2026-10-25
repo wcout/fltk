@@ -273,18 +273,6 @@ void Fl_Terminal::Selection::scroll(int nrows) {
 ////// EscapeSeq Class Methods ////////
 ///////////////////////////////////////
 
-// Append char to buff[] safely (with bounds checking)
-//    Returns:
-//      success - ok
-//      fail    - buffer full/overflow
-//
-int Fl_Terminal::EscapeSeq::append_buff(char c) {
-  if (buffp_ >= buffendp_) return fail;   // end of buffer reached?
-  *buffp_++ = c;
-  *buffp_   = 0;                          // keep buff[] null terminated
-  return success;
-}
-
 // Append whatever integer string is at valbuffp into vals_[] safely w/bounds checking
 //    Assumes valbuffp points to a null terminated string.
 //    Returns:
@@ -292,17 +280,15 @@ int Fl_Terminal::EscapeSeq::append_buff(char c) {
 //       fail    - error occurred (non-integer, or vals_[] full)
 //
 int Fl_Terminal::EscapeSeq::append_val(void) {
-  if (vali_ >= maxvals)                            // vals_[] full?
-    { vali_ = maxvals-1; return fail; }            // clamp index, fail
   if (!valbuffp_ || (*valbuffp_ == 0))             // no integer to parse? e.g. ESC[m, ESC[;m
-    { vals_[vali_] = 0; return success; }          // zero in array, do not inc vali
-  if (sscanf(valbuffp_, "%d", &vals_[vali_]) != 1) // Parse integer into vals_[]
+    { return success; }                            // zero in array
+  int val;
+  if (sscanf(valbuffp_, "%d", &val) != 1)          // Parse integer into vals_[]
     { return fail; }                               // fail if parsed a non-integer
-  if (*(buff_+2) != '?')                           // except in [?xxx mode:
-     vals_[vali_] &= 0x3ff;                        // sanity: enforce int in range 0 ~ 1023 (prevent DoS attack)
-  if (++vali_ >= maxvals)                          // advance val index, fail if too many vals
-    { vali_ = maxvals-1; return fail; }            // clamp + fail
-  valbuffp_ = 0;                                   // parsed val ok, reset valbuffp to NULL
+  if (!(buff_.size() >= 3 && buff_[2] == '?'))     // except in [?xxx mode:
+     val &= 0x3ff;                                 // sanity: enforce int in range 0 ~ 1023 (prevent DoS attack)
+  vals_.push_back(val);
+  valbuffp_ = nullptr;                             // parsed val ok, reset valbuffp to NULL
   return success;
 }
 
@@ -319,13 +305,9 @@ Fl_Terminal::EscapeSeq::EscapeSeq(void) {
 void Fl_Terminal::EscapeSeq::reset(void) {
   esc_mode_  = 0;                          // disable ESC mode, so parse_in_progress() returns false
   csi_       = false;                      // CSI off until '[' received
-  buffp_     = buff_;                      // point to beginning of buffer
-  buffendp_  = buff_ + (maxbuff - 1);      // point to end of buffer
-  valbuffp_  = 0;                          // disable val ptr (no vals parsed yet)
-  vali_      = 0;                          // zero val index
-  buff_[0]   = 0;                          // null terminate buffer
-  vals_[0]   = 0;                          // first val[] 0
-  memset(vals_, 0, sizeof(vals_));
+  buff_.clear();                           // NOTE: clear() keeps capacity reserved
+  vals_.clear();                           // NOTE: clear() keeps capacity reserved
+  valbuffp_  = nullptr;                    // disable val ptr (no vals parsed yet)
 }
 
 // Return current escape mode.
@@ -340,7 +322,7 @@ void Fl_Terminal::EscapeSeq::esc_mode(char val) { esc_mode_ = val; }
 // Return the total vals parsed.
 //    This is really only valid after parse() returns 'completed'.
 //
-int Fl_Terminal::EscapeSeq::total_vals(void) const { return vali_; }
+int Fl_Terminal::EscapeSeq::total_vals(void) const { return vals_.size(); }
 
 // Return the value at index i.
 //    i is not range checked; it's assumed 0 <= i < total_vals().
@@ -419,30 +401,27 @@ int Fl_Terminal::EscapeSeq::parse(char c) {
       c = (c == '7' ? 's' : 'u');           // as <ESC>[s <ESC>[u (save/restore cursor)
     }
     if (c == ']') {                         // <ESC>] OSC sequence?
-      esc_mode(c);
-      csi_      = false;
+      esc_mode(c);                          // this is an OSC command
+      csi_      = false;                    // not a CSI sequence
       if (append_buff(c) < 0) goto pfail;   // save ']' in buf
       return success;                       // success
     } else if (c == '[') {                  // <ESC>[? CSI (Ctrl Seq Introducer)
       esc_mode(c);                          // switch to parsing mode for ESC[#;#;#..
       csi_      = true;                     // this is now a CSI sequence
-      vali_     = 0;                        // zero vals_[] index
-      valbuffp_ = 0;                        // valbuffp NULL (no vals yet)
+      valbuffp_ = nullptr;                  // valbuffp NULL (no vals yet)
       if (append_buff(c) < 0) goto pfail;   // save '[' in buf
       return success;                       // success
     } else if ((c >= '@' && c <= 'Z') ||    // C1 control code (e.g. <ESC>D, <ESC>c, etc)
                (c >= 'a' && c <= 'z')) {
       esc_mode(c);                          // save op in esc_mode() for caller to see
       csi_      = false;                    // NOT a CSI sequence
-      vali_     = 0;
-      valbuffp_ = 0;                        // valbuffp NULL (no vals yet)
+      valbuffp_ = nullptr;                  // valbuffp NULL (no vals yet)
       if (append_buff(c) < 0) goto pfail;   // save op in buf
       return completed;                     // completed sequence
     } else if (c == '(' || c == ')') {      // ESCx?
       esc_mode(c);
       csi_     = false;
-      vali_    = 0;
-      valbuffp_ = 0;
+      valbuffp_ = nullptr;
       if (append_buff(c) < 0) goto pfail;   // save op in buf
       return success;
     } else {
@@ -456,14 +435,14 @@ int Fl_Terminal::EscapeSeq::parse(char c) {
     return success;
   } else if (esc_mode() == '[') {           // '[' mode? e.g. ESC[... aka. is_csi()
     if (c == ' ' &&
-        ((buffp_ == buff_ + 2) ||
-        (buffp_ == buff_ + 3)))             // ignore SP in ESC[5 SP q and also in ESC[ SP q
+        (buff_.size() == 2 ||
+         buff_.size() == 3))
       return success;
-    if ((c == '!' || c == '?' || c == '<') && buffp_ == buff_ + 2) { // '<' is from mouse ESC[<...M/m mouse report
+    if ((c == '!' || c == '?' || c == '<') && buff_.size() == 2) { // '<' is from mouse ESC[<...M/m mouse report
       if (append_buff(c) < 0) goto pfail;   // '!' ESC[! commands (like ESC[!p soft reset)
       return success;
     }
-    else if (c == '>' && buffp_ == buff_ + 2) {
+    else if (c == '>' && buff_.size() == 2) {
       if (append_buff(c) < 0) goto pfail;
       return success;
     }
@@ -474,7 +453,7 @@ int Fl_Terminal::EscapeSeq::parse(char c) {
     }
     if (c >= '0' && c <= '9') {             // parsing an integer?
       if (!valbuffp_)                       // valbuffp not set yet?
-        { valbuffp_ = buffp_; }             // point to first char in integer string
+        { valbuffp_ = &buff_.back() + 1; }  // point to first char in integer string
       if (append_buff(c) < 0) goto pfail;   // add value to buffer
       return success;
     }

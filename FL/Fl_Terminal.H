@@ -325,8 +325,8 @@ class FL_EXPORT Fl_Terminal : public Fl_Group {
   ////// Fl_Terminal Public Enums //////
   //////////////////////////////////////
 private:
-	static const Fl_Color DefaultFgColor = 0xd0d0d000; // off white
-	static const Fl_Color NoColor = 0xffffffff;        // "shine through" color
+   static constexpr Fl_Color DefaultFgColor = 0xd0d0d000; // off white
+   static constexpr Fl_Color NoColor        = 0xffffffff; // "shine through" color
 public:
   /**
     \enum RedrawStyle
@@ -776,25 +776,22 @@ private:
   class FL_EXPORT EscapeSeq {
   public:
     // EscapeSeq Constants
-    // Maximums
-    static const int maxbuff   = 256; // character buffer
-    static const int maxvals   = 20;  // integer value buffer
     // Return codes
-    static const int success   = 0;   // operation succeeded
-    static const int fail      = -1;  // operation failed
-    static const int completed = 1;   // multi-step operation completed successfully
+    static constexpr int success   = 0;  // operation succeeded
+    static constexpr int fail      = -1; // operation failed
+    static constexpr int completed = 1;  // multi-step operation completed successfully
   private:
     char  esc_mode_;                  // escape parsing mode state
     char  csi_;                       // This is an ESC[.. sequence (Ctrl Seq Introducer)
-    char  buff_[maxbuff];             // escape sequence being parsed
-    char *buffp_;                     // parsing ptr into buff[]
-    char *buffendp_;                  // end of buff[] (ptr to last valid buff char)
-    char *valbuffp_;                  // pointer to first char in buff of integer being parsed
-    int   vals_[maxvals];             // value array for parsing #'s in ESC[#;#;#..
-    int   vali_;                      // parsing index into vals_[], 0 if none
+    std::string buff_;                // escape sequence being parsed
+    std::vector<int> vals_;           // value array for parsing #'s in ESC[#;#;#..
+    char *valbuffp_;                  // pointer to first char in buff_ of integer being parsed
     int   save_row_, save_col_;       // used by ESC[s/u for save/restore
 
-    int append_buff(char c);
+    inline int append_buff(char c) {
+      buff_.push_back(c);
+      return success;
+    }
     int append_val(void);
 
   public:
@@ -810,7 +807,7 @@ private:
     int  parse(char c);
     void save_cursor(int row, int col);
     void restore_cursor(int &row, int &col);
-    std::string buf() const { return std::string(buff_, buffp_ - buff_); }
+    std::string buf() const { return buff_; }
   };
 
   // Partial UTF-8 Buffer Class ////////////////////////////////////////////
