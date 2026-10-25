@@ -735,7 +735,6 @@ void Fl_PTY_Terminal::command(const char *cmd) {
   write_pty(cmd, strlen(cmd));
   write_pty("\n", 1);
 }
-
 // --snip--✂----------------Fl_PTY_Terminal.cxx-----------------------------
 
 //
