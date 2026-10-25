@@ -735,6 +735,7 @@ void Fl_PTY_Terminal::command(const char *cmd) {
   write_pty(cmd, strlen(cmd));
   write_pty("\n", 1);
 }
+
 // --snip--✂----------------Fl_PTY_Terminal.cxx-----------------------------
 
 //
@@ -926,7 +927,8 @@ int main(int argc, char** argv) {
     ;
   }
   if (cmd.size()) {
-    Fl::add_timeout(0., [](void *d) {
+    // delay command to let terminal initialize completely before
+    Fl::add_timeout(0.2, [](void *d) {
       Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)d;
       term->command(cmd.c_str());
     }, terminal);
