@@ -1252,7 +1252,7 @@ void Fl_Terminal::default_tabstops(void) {
 
 // Clear all tabstops
 void Fl_Terminal::clear_all_tabstops(void) {
-  tabstops_.clear();
+  tabstops_.resize(tabstops_.size(), false); // keep size, but reset values
 }
 
 // Set tabstop at current cursor x position
