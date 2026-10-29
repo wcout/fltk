@@ -3336,13 +3336,13 @@ cup:
       case 'n':                                  // ESC[#n - status report
         //DEBUG fprintf(stderr, "ESC[%dn\n", val0);
         switch (val0) {
-          case 5: {                              // ESC[5m - report ready
+          case 5: {                              // ESC[5n - report ready
             char buf[40];
             snprintf(buf, sizeof(buf), "\x1b[0n"); // OK
             send_pty(buf);
             break;
           }
-          case 6: {                              // ESC[6m - report cursor position
+          case 6: {                              // ESC[6n - report cursor position
             char buf[40];
             snprintf(buf, sizeof(buf), "\x1b[%d;%dR", cursor_.row() + 1, cursor_.col() + 1);
             send_pty(buf);
