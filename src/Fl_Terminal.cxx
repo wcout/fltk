@@ -4144,23 +4144,20 @@ const std::vector<Fl_Color> &Fl_Terminal::draw_row_bg(int grow, int X, int Y) co
       lastattr = u8c->attrib();
     }
     pwidth = u8c->pwidth_int();
+    bool inverse = (u8c->attrib() & Fl_Terminal::INVERSE);   // Inverse mode?
     if (select_.dynamic_color()) {                           // use dynamic selection colors for each character?
       if (is_inside_selection(grow, gcol)) {                 // text in mouse select?
-        if (u8c->fgcolor() != NoColor)                       // if fg color used,
-           bg_col = u8c->fgcolor();                          // use fg color for bg
-        else bg_col = (u8c->attrib() & Fl_Terminal::INVERSE) // Inverse mode?
-                         ? select_.selectionfgcolor() : select_.selectionbgcolor(); // use selection color
-        bg_col = fl_contrast(bg_col, current_style_->ctrstcolor()); // but ensure it has enough contrast
-        if (u8c->bgcolor() != NoColor) bg_col = fl_contrast(bg_col, u8c->bgcolor());
+        bg_col = inverse ? u8c->bgcolor() : u8c->fgcolor();
+        if (bg_col == NoColor) bg_col = fl_contrast(color(), inverse ? selectionfgcolor() : selectionbgcolor());
       } else {                                               // unselected text
-        bg_col = (u8c->attrib() & Fl_Terminal::INVERSE) ?    // Inverse mode?
+        bg_col = inverse ?
           u8c->attr_fg_color(current_style_->defaultfgcolor())
             : u8c->attr_bg_color(this);                      // use bg color for bg
       }
     } else {                                                 // use same selection color for whole block
       bg_col = is_inside_selection(grow, gcol)               // text in mouse select?
-                 ? fl_contrast(select_.selectionbgcolor(), current_style_->ctrstcolor())               // ..use select bg color
-                 : (u8c->attrib() & Fl_Terminal::INVERSE)    // Inverse mode?
+                 ? fl_contrast(selectionbgcolor(), current_style_->ctrstcolor())               // ..use select bg color
+                 : inverse
                    ? u8c->attr_fg_color(current_style_->defaultfgcolor())  // ..use fg color for bg
                    : u8c->attr_bg_color(this);               // ..use bg color for bg
     }
@@ -4249,14 +4246,19 @@ void Fl_Terminal::draw_row(int grow, int Y) const {
     }
     // DRAW TEXT
     // 1) Color for text
+    bool inverse = (u8c->attrib() & Fl_Terminal::INVERSE);   // Inverse attrib?
     if (is_cursor && cursor_.style() <= 2) {                 // only for block cursor type:
       fg = cursorfgcolor();                                  // color for text under cursor
     }
-    else fg = is_selection                                   // text in mouse selection?
-      ? fl_contrast(select_.selectionfgcolor(), textfgcolor_default())                           // ..use selection FG color
-      : (u8c->attrib() & Fl_Terminal::INVERSE)               // Inverse attrib?
-        ? u8c->attr_bg_color(this) == NoColor ? current_style_->ctrstcolor() : u8c->attr_bg_color(this)                            // ..use char's bg color for fg
-        : u8c->attr_fg_color(current_style_->defaultfgcolor());      // ..use char's fg color for fg
+    else if (is_selection) {                                 // text in mouse selection?
+      fg = inverse ? u8c->fgcolor() : u8c->bgcolor();
+      if (fg == NoColor) fg = selectionfgcolor();
+      fg = fl_contrast(fg, bg[off]);
+    }
+    else fg = inverse
+      ? u8c->attr_bg_color(this) == NoColor ? current_style_->ctrstcolor() : u8c->attr_bg_color(this)                            // ..use char's bg color for fg
+      : u8c->attr_fg_color(current_style_->defaultfgcolor());      // ..use char's fg color for fg
+
     if (is_cursor && cursor_.dynamic_color()) fg = fl_contrast(fg, cbg);
     else if (is_selection) fg = fl_contrast(fg, bg[off]);    // ensure it has enough contrast to row bg
     fl_color(fg);
