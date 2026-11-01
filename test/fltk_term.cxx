@@ -905,7 +905,7 @@ int main(int argc, char** argv) {
   term.textsize(fontsize > 0 ? fontsize : 18);
   term.hscrollbar_style(Fl_Terminal::SCROLLBAR_OFF);
   term.scrollbar_size(6);
-  term.scrollbar->color(FL_WHITE, FL_RED);
+  if (alt_colors) term.toggle_default_colors(); // switch to GTK colors
 
   // calculate how the big the window must be for the terminal
   int term_w, term_h;
