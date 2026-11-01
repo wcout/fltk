@@ -4542,7 +4542,6 @@ int Fl_Terminal::handle(int e) {
       return 1;
     case FL_FOCUS:
       Fl::focus(this); // needed for start_cursor() to go (is set anyway later by caller, if we return 1)
-      set_app_cursor();
     case FL_UNFOCUS:
       e == FL_FOCUS ? start_cursor_blink() : stop_cursor_blink();
       redraw();
