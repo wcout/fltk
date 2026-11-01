@@ -70,6 +70,7 @@ public:
   void input(const std::string& buffer);
   void send_pty(const char *buf_) override;
   int handle(int event) override;
+  void toggle_default_colors();
   void resize(int X, int Y, int W, int H) override;
   void command(const char *cmd_);
   void logging(int level, FILE *logfile = stderr) {
@@ -614,10 +615,16 @@ int Fl_PTY_Terminal::handle(int event) {
       return 1;
     }
     if (key == FL_F + 12) {
+      if (state & FL_CTRL) {
+         // Ctrl-F12 switches the standard color palette
+         toggle_default_colors();
+         return 1;
+      }
       // toggle background color
-      static std::vector<Fl_Color> bg_colors = { FL_WHITE, FL_BLACK, FL_DARK_BLUE, FL_DARK_GREEN,
-                                                 0x10101000, 0x22222200, 0xdddddd00, 0xf0f0f000
-                                               };
+      static std::vector<Fl_Color> bg_colors = {
+        0xffffff00, 0x00000000, 0x00007f00, 0x00910000, // white/black/dark blue/dark green
+        0x10101000, 0x22222200, 0xdddddd00, 0xf0f0f000  // increasing light gray levels
+      };
       static size_t current_bg_index = 0;
       current_bg_index++;
       if (current_bg_index >= bg_colors.size()) {
@@ -679,6 +686,38 @@ void Fl_PTY_Terminal::snap_to_grid(void) {
 void Fl_PTY_Terminal::snap_to_grid_cb(void *d) {
   Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)d;
   term->snap_to_grid();
+}
+
+void Fl_PTY_Terminal::toggle_default_colors() {
+  // NOTE: toggling colors during run, will not change current
+  //       screen, only new text (that would require FL_Terminal to
+  //       store colors 0-15 not as rgb, but as index.
+  static bool def = true;
+  static Fl_Color def_colrs[32] = { (Fl_Color)-1 };
+  static Fl_Color gtk_colrs[32] = {
+    // fg normal
+    0x17142100, 0xc01c2800, 0x26a26900, 0xa2734c00, 0x12488b00, 0xa347ba00, 0x2aa1b300, 0xd0cfcc00,
+    // fg bright
+    0x37344100, 0xe03c4800, 0x46c28900, 0xc2936c00, 0x3268ab00, 0xc367da00, 0x4ac1d300, 0xf0efec00,
+    // bg normal
+    0x17142100, 0xc01c2800, 0x26a26900, 0xa2734c00, 0x12488b00, 0xa347ba00, 0x2aa1b300, 0xd0cfcc00,
+    // bg bright
+    0x37344100, 0xe03c4800, 0x46c28900, 0xc2936c00, 0x3268ab00, 0xc367da00, 0x4ac1d300, 0xf0efec00
+  };
+
+  if (def_colrs[0] == (Fl_Color)-1) {
+    for (int i = 0; i < 16; i++) {
+      def_colrs[i] = xterm_fg_color(i);
+      def_colrs[i + 16] = xterm_bg_color(i);
+    }
+  }
+  def = !def;
+  Fl_Color *c = def ? def_colrs : gtk_colrs;
+  for (int i = 0; i < 16; i++) {
+    xterm_fg_color(i, c[i]);
+    xterm_bg_color(i, c[i + 16]);
+  }
+  redraw();
 }
 
 // Catch GUI-Resize and pass it on to the Bash
@@ -748,8 +787,9 @@ static int no_set_term = 0;
 static int history_lines = -1; // -1: Fl_Terminal default (100)
 static int columns = 80;
 static int rows = 25;
-static int color = FL_WHITE;
+static Fl_Color color = fl_rgb_color(FL_WHITE);
 static int fontsize = 0;
+static int alt_colors = 0;
 static std::string cmd; // initial command (none)
 
 void parse_command_line(int argc, char *argv[]) {
@@ -800,6 +840,7 @@ void parse_command_line(int argc, char *argv[]) {
                 "-F name .. use font (optional append ::size)\n"
                 "-L name .. log to file\n"
                 "-l[l] .... log input [and output]\n"
+                "-c ....... use alternate color set (GTK style)\n"
                 "-g WxH ... geometry width x height chars\n"
                 "-h n ..... use n history lines\n"
                 "-s ....... don't show splash screen\n"
@@ -813,6 +854,7 @@ void parse_command_line(int argc, char *argv[]) {
       test_arg(argv[i], 'l', log_);
       test_arg(argv[i], 't', no_set_term);
       test_arg(argv[i], 's', no_splash);
+      test_arg(argv[i], 'c', alt_colors);
       if (i + 1 < argc) { // options with parameter
         switch (o) {
           case 'h':

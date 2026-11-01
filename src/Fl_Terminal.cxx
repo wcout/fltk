@@ -76,57 +76,76 @@ static Fl_Color dim_color(Fl_Color val) {
   return rgb(r,g,b);
 }
 
-// Return bold version of color 'val'
-static Fl_Color bold_color(Fl_Color val) {
-  int r = clamp(red(val) + 0x20, 0, 255);
-  int g = clamp(grn(val) + 0x20, 0, 255);
-  int b = clamp(blu(val) + 0x20, 0, 255);
-  //DEBUG ::printf("BOLD COLOR: %08x -> %08x\n", val, rgb(r,g,b));
-  return rgb(r,g,b);
-}
+/**
+  Default standard foreground colors produced with <ESC>[3xm (x='0'..'7')
+*/
+static Fl_Color xterm_fg_colors_[] = {
+  // normal fg colors
+  0x00000000,       // 0
+  0xd0000000,       // 1 - red
+  0x00d00000,       // 2 - grn
+  0xd0d00000,       // 3 - yel
+  0x0000d000,       // 4 - blu
+  0xd000d000,       // 5 - mag
+  0x00d0d000,       // 6 - cyn
+  0xd0d0d000,       // 7 - white
+  // bright (intense) fg colors
+  0x20202000,       // 8
+  0xf0202000,       // 9  - red
+  0x20f02000,       // 10 - grn
+  0xf0f02000,       // 11 - yel
+  0x2020f000,       // 12 - blu
+  0xf020f000,       // 13 - mag
+  0x20f0f000,       // 14 - cyn
+  0xf0f0f000        // 15 - white
+};
+
+/**
+  Default standard background colors produced with <ESC>[4xm (x='0'..'7')
+
+  NOTE: Background colors should be just a little darker than
+        the fg colors to prevent too much brightness clashing
+        for 'normal' bg vs fg colors.
+*/
+static Fl_Color xterm_bg_colors_[] = {
+  // normal bg colors
+  0x00000000,       // 0
+  0xc0000000,       // 1 - red
+  0x00c00000,       // 2 - grn
+  0xc0c00000,       // 3 - yel
+  0x0000c000,       // 4 - blu
+  0xc000c000,       // 5 - mag
+  0x00c0c000,       // 6 - cyn
+  0xc0c0c000,       // 7 - white
+  // bright (intense) bg colors
+  0x20202000,       // 8
+  0xe0202000,       // 9  - red
+  0x20e02000,       // 10 - grn
+  0xe0e02000,       // 11 - yel
+  0x2020e000,       // 12 - blu
+  0xe020e000,       // 13 - mag
+  0x20e0e000,       // 14 - cyn
+  0xe0e0e000        // 15 - white
+};
+
+/*static*/
+void Fl_Terminal::xterm_fg_color(size_t i, Fl_Color v) { xterm_fg_colors_[i%16] = v; }
+/*static*/
+void Fl_Terminal::xterm_bg_color(size_t i, Fl_Color v) { xterm_bg_colors_[i%16] = v; }
+/*static*/
+Fl_Color Fl_Terminal::xterm_fg_color(size_t i) { return xterm_fg_colors_[i%16]; }
+/*static*/
+Fl_Color Fl_Terminal::xterm_bg_color(size_t i) { return xterm_bg_colors_[i%16]; }
+
 
 // Return an FLTK color for given XTERM foreground color index (0..7)
-Fl_Color Fl_Terminal::CharStyle::fltk_fg_color(uchar ci) {
-  static const Fl_Color xterm_fg_colors_[] = {
-    0x00000000,       // 0
-    0xd0000000,       // 1 - red
-    0x00d00000,       // 2 - grn
-    0xd0d00000,       // 3 - yel
-    0x0000d000,       // 4 - blu
-    0xd000d000,       // 5 - mag
-    0x00d0d000,       // 6 - cyn
-    0xd0d0d000        // 7 - white
-  };
-// NOTE: dead code???
-//  if (ci==39 || ci==49) ::printf("fltk_fg_color(%d)\n", ci);
-//  if (ci==39) return defaultfgcolor_;   // special case for 'reset' color
-//  if (ci==49) return defaultbgcolor_;   // special case for 'reset' color
-  ci &= 0x07;         // clamp to array size
-  return xterm_fg_colors_[ci];
+Fl_Color Fl_Terminal::CharStyle::fltk_fg_color(uchar ci) const {
+  return xterm_fg_color(ci);
 }
 
 // Return an FLTK color for the given background color index (0..7) and attribute.
-//    Background colors should be just a little darker than
-//    the fg colors to prevent too much brightness clashing
-//    for 'normal' bg vs fg colors.
-//
-Fl_Color Fl_Terminal::CharStyle::fltk_bg_color(uchar ci) {
-  static const Fl_Color xterm_bg_colors_[] = {
-    0x00000000,       // 0
-    0xc0000000,       // 1 - red
-    0x00c00000,       // 2 - grn
-    0xc0c00000,       // 3 - yel
-    0x0000c000,       // 4 - blu
-    0xc000c000,       // 5 - mag
-    0x00c0c000,       // 6 - cyn
-    0xc0c0c000        // 7 - white
-  };
-// NOTE: dead code???
-//  if (ci==39 || ci==49) ::printf("fltk_bg_color(%d)\n", ci);
-//  if (ci==39) return defaultfgcolor_;   // special case for 'reset' color
-//  if (ci==49) return defaultbgcolor_;   // special case for 'reset' color
-  ci &= 0x07;         // clamp to array size
-  return xterm_bg_colors_[ci];
+Fl_Color Fl_Terminal::CharStyle::fltk_bg_color(uchar ci) const {
+  return xterm_bg_color(ci);
 }
 
 // See if an Fl_Boxtype is FL_XXX_FRAME
@@ -536,12 +555,12 @@ uchar Fl_Terminal::CharStyle::colorbits_only(uchar inflags) const {
 }
 
 void Fl_Terminal::CharStyle::fgcolor_xterm(uchar val, bool bright/* = false*/) {
-  fgcolor_ = bright ? bold_color(fltk_fg_color(val)) : fltk_fg_color(val);
+  fgcolor_ = bright ? val + 8 : val;
   set_charflag(FG_XTERM);
 }
 
 void Fl_Terminal::CharStyle::bgcolor_xterm(uchar val, bool bright/* = false*/) {
-  bgcolor_ = bright ? bold_color(fltk_bg_color(val)) : fltk_bg_color(val);
+  bgcolor_ = bright ? val + 8 : val;
   set_charflag(BG_XTERM);
 }
 
@@ -621,12 +640,18 @@ void Fl_Terminal::Utf8Char::fl_font_set(const CharStyle& style) const {
 
 // Return the foreground color as an fltk color
 Fl_Color Fl_Terminal::Utf8Char::fgcolor(void) const {
-  return fgcolor_;
+  if (fgcolor_ == NoColor) return fgcolor_;
+  if ((fgcolor_ == 0 && !(charflags_ & FG_XTERM)) || fgcolor_ > 16)
+    return fgcolor_;
+  return Fl_Terminal::xterm_fg_color(fgcolor_);
 }
 
 // Return the background color as an fltk color
 Fl_Color Fl_Terminal::Utf8Char::bgcolor(void) const {
-  return bgcolor_;
+  if (bgcolor_ == NoColor) return bgcolor_;
+  if ((bgcolor_ == 0 && !(charflags_ & BG_XTERM)) || bgcolor_ > 16)
+    return bgcolor_;
+  return Fl_Terminal::xterm_bg_color(bgcolor_);
 }
 
 // Return the width of this character in floating point pixels
@@ -656,7 +681,7 @@ Fl_Color Fl_Terminal::Utf8Char::attr_color_(Fl_Color col, const Fl_Widget *grp) 
   if (grp && ((col == NoColor) || (col == grp->color()))) return grp->color();
   switch (attrib_ & (Fl_Terminal::BOLD|Fl_Terminal::DIM)) {
     case 0: return col;                                   // not bold or dim? no change
-    case Fl_Terminal::BOLD: return bold_color(col);       // bold? use bold_color()
+    case Fl_Terminal::BOLD: return col;                   // bold? has no influence!
     case Fl_Terminal::DIM : return dim_color(col);        // dim?  use dim_color()
     default:                return col;                   // bold + dim? cancel out
   }
@@ -669,7 +694,7 @@ Fl_Color Fl_Terminal::Utf8Char::attr_color_(Fl_Color col, const Fl_Widget *grp) 
 Fl_Color Fl_Terminal::Utf8Char::attr_fg_color(Fl_Color defaultfgcolor) const {
   //DEBUG ::printf("fgcolor_ = 0x%x\n", fgcolor_);
   Fl_Color c = fgcolor_ == NoColor ?             // see thru color?
-    defaultfgcolor : fgcolor_;                   // return default color
+    defaultfgcolor : fgcolor();                  // return default color
   return (charflags_ & Fl_Terminal::FG_XTERM)    // fg is an xterm color?
            ? attr_color_(c, nullptr)             // ..use attributes
            : c;                                  // ..ignore attributes.
@@ -679,8 +704,7 @@ Fl_Color Fl_Terminal::Utf8Char::attr_bg_color(const Fl_Widget *grp) const {
   if (grp && (bgcolor_ == NoColor))              // see thru color?
     { return grp->color(); }                     // return grp's color()
   return (charflags_ & Fl_Terminal::BG_XTERM)    // bg is an xterm color?
-//           ? attr_color_(bgcolor(), grp)         // ..use attributes <- SEEMS WRONG
-           ? bgcolor()                           // ..ignore attributes (at least bold, what about dim?)
+           ? attr_color_(bgcolor(), grp)         // ..use attributes
            : bgcolor();                          // ..ignore attributes.
 }
 
@@ -2891,17 +2915,16 @@ void Fl_Terminal::handle_SGR(void) {     // ESC[...m?
         continue;                                       // continue loop to parse more vals
       case 5:
         if (val < 16) {                                 // Xterm standard colors
-           Fl_Color c;
            unsigned char cr, cg, cb;
            if (rgbcode == 38) {                         // use builtin fg table
-              c = current_style_->fltk_fg_color(val%8); // normal colors for index 0-7
-              if (val >= 8) c = bold_color(c);          // bright (bold) color for index 8-15
-              Fl::get_color(c, cr, cg, cb);
+              current_style_->fgcolor_xterm(val%8, val >= 8);
+              rgbcode = rgbmode = 0;
+              continue;
            }
            else if (rgbcode == 48) {                    // use builtin bg table
-              c = current_style_->fltk_bg_color(val%8); // normal colors for index 0-7
-              if (val >= 8) c = bold_color(c);          // bright (bold) colors for index 8-15
-              Fl::get_color(c, cr, cg, cb);
+              current_style_->bgcolor_xterm(val%8, val >= 8);
+              rgbcode = rgbmode = 0;
+              continue;
            }
            else {
              Fl::get_color(val, cr, cg, cb);            // from FLTK standard palette

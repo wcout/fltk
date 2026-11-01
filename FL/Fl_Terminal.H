@@ -467,8 +467,8 @@ protected:
     // Colors - All access to colors are by Fl_Color only.
     //          There are three ways to SET colors: Fl_Color, rgb, xterm(uchar)
     //
-    Fl_Color fltk_fg_color(uchar ci);
-    Fl_Color fltk_bg_color(uchar ci);
+    Fl_Color fltk_fg_color(uchar ci) const;
+    Fl_Color fltk_bg_color(uchar ci) const;
     Fl_Color fgcolor(void) const;
     Fl_Color bgcolor(void) const;
     Fl_Color ctrstcolor(void) const     { return ctrstcolor_; }
@@ -1223,6 +1223,14 @@ public:
   void  textbgcolor(Fl_Color val);
   void  textfgcolor_default(Fl_Color val);
   void  textbgcolor_default(Fl_Color val);
+  /// Override default xterm foreground color index \ p i (0-15) with Fl_Color \p v
+  static void     xterm_fg_color(size_t i, Fl_Color v);
+  /// Override default xterm background color index \ p i (0-15) with Fl_Color \p v
+  static void     xterm_bg_color(size_t i, Fl_Color v);
+  /// Get default xterm foreground color index \ p i (0-15, where 8-15 is the bright color)
+  static Fl_Color xterm_fg_color(size_t i);
+  /// Get default xterm background color index \ p i (0-15, where 8-15 is the bright color)
+  static Fl_Color xterm_bg_color(size_t i);
   /// Return text font used to draw all text in the terminal.
   Fl_Font     textfont(void)      const { return current_style_->fontface(); }
   /// Return text font size used to draw all text in the terminal.
