@@ -4148,7 +4148,7 @@ const std::vector<Fl_Color> &Fl_Terminal::draw_row_bg(int grow, int X, int Y) co
     if (select_.dynamic_color()) {                           // use dynamic selection colors for each character?
       if (is_inside_selection(grow, gcol)) {                 // text in mouse select?
         bg_col = inverse ? u8c->bgcolor() : u8c->fgcolor();
-        if (bg_col == NoColor) bg_col = fl_contrast(color(), inverse ? selectionfgcolor() : selectionbgcolor());
+        if (bg_col == NoColor) bg_col = fl_contrast(inverse ? selectionfgcolor() : selectionbgcolor(), color());
       } else {                                               // unselected text
         bg_col = inverse ?
           u8c->attr_fg_color(current_style_->defaultfgcolor())
@@ -4252,7 +4252,7 @@ void Fl_Terminal::draw_row(int grow, int Y) const {
     }
     else if (is_selection) {                                 // text in mouse selection?
       fg = inverse ? u8c->fgcolor() : u8c->bgcolor();
-      if (fg == NoColor) fg = selectionfgcolor();
+      if (fg == NoColor || !select_.dynamic_color()) fg = selectionfgcolor();
       fg = fl_contrast(fg, bg[off]);
     }
     else fg = inverse
