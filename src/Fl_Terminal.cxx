@@ -3090,6 +3090,7 @@ bool Fl_Terminal::osc_command(const char *cmd) {
   mode, the original buffer will be resized too.
 */
 void Fl_Terminal::toggle_alternate_buffer(bool on) {
+  if (alternate_buffer_ == on) return; // safety check
   static RingBuffer saved_ring;
   static CharStyle saved_char_style;
   static Cursor saved_cursor;
@@ -3636,23 +3637,13 @@ void Fl_Terminal::print_char(char c) {
   } else if (escseq.parse_in_progress()) {     // ESC sequence in progress?
     handle_escseq(c);
   } else {                                     // Handle printable char..
-    if (line_graphics_) {
-      if (c == 'a') return print_char("▒");
-      if (c == 'j') return print_char("┘");
-      if (c == 'k') return print_char("┐");
-      if (c == 'l') return print_char("┌");
-      if (c == 'm') return print_char("└");
-      if (c == 'n') return print_char("┼");
-      if (c == 'o') return print_char("⎺");
-      if (c == 'p') return print_char("⎻");
-      if (c == 'q') return print_char("─");
-      if (c == 'r') return print_char("⎼");
-      if (c == 's') return print_char("⎽");
-      if (c == 't') return print_char("├");
-      if (c == 'u') return print_char("┤");
-      if (c == 'v') return print_char("┴");
-      if (c == 'w') return print_char("┬");
-      if (c == 'x') return print_char("│");
+    if (line_graphics_ && c >= 0x60 && c <= 0x7e) {
+      static constexpr const char *graphics[] = {
+        "◆", "▒", "␉", "␌", "␍", "␊", "°", "±", "␤", "␋",
+        "┘", "┐", "┌", "└", "┼", "⎺", "⎻", "─", "⎼", "⎽", "├", "┤", "┴", "┬", "│",
+        "≤", "≥", "π", "≠", "£", "·"
+      };
+      return print_char(graphics[c - 0x60]);
     }
     if (!validate_cursor(do_scroll)) return;
     insert_mode_ ? insert_char(c, 1) : plot_char(c, cursor_row(), cursor_col());
