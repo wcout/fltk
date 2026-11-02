@@ -81,22 +81,22 @@ static Fl_Color dim_color(Fl_Color val) {
 */
 static Fl_Color xterm_fg_colors_[] = {
   // normal fg colors
-  0x00000000,       // 0
-  0xd0000000,       // 1 - red
-  0x00d00000,       // 2 - grn
-  0xd0d00000,       // 3 - yel
-  0x0000d000,       // 4 - blu
-  0xd000d000,       // 5 - mag
-  0x00d0d000,       // 6 - cyn
-  0xd0d0d000,       // 7 - white
+  0x00000000,       // 0 - black
+  0xc0000000,       // 1 - red
+  0x00c00000,       // 2 - grn
+  0xc0c00000,       // 3 - yel
+  0x0000c000,       // 4 - blu
+  0xc000c000,       // 5 - mag
+  0x00c0c000,       // 6 - cyn
+  0xc0c0c000,       // 7 - white
   // bright (intense) fg colors
-  0x20202000,       // 8
-  0xf0202000,       // 9  - red
-  0x20f02000,       // 10 - grn
-  0xf0f02000,       // 11 - yel
-  0x2020f000,       // 12 - blu
-  0xf020f000,       // 13 - mag
-  0x20f0f000,       // 14 - cyn
+  0x30303000,       // 8  - black
+  0xf0303000,       // 9  - red
+  0x30f03000,       // 10 - grn
+  0xf0f03000,       // 11 - yel
+  0x3030f000,       // 12 - blu
+  0xf030f000,       // 13 - mag
+  0x30f0f000,       // 14 - cyn
   0xf0f0f000        // 15 - white
 };
 
@@ -109,16 +109,16 @@ static Fl_Color xterm_fg_colors_[] = {
 */
 static Fl_Color xterm_bg_colors_[] = {
   // normal bg colors
-  0x00000000,       // 0
-  0xc0000000,       // 1 - red
-  0x00c00000,       // 2 - grn
-  0xc0c00000,       // 3 - yel
-  0x0000c000,       // 4 - blu
-  0xc000c000,       // 5 - mag
-  0x00c0c000,       // 6 - cyn
-  0xc0c0c000,       // 7 - white
+  0x00000000,       // 0 - black
+  0xb0000000,       // 1 - red
+  0x00b00000,       // 2 - grn
+  0xb0b00000,       // 3 - yel
+  0x0000b000,       // 4 - blu
+  0xb000b000,       // 5 - mag
+  0x00b0b000,       // 6 - cyn
+  0xb0b0b000,       // 7 - white
   // bright (intense) bg colors
-  0x20202000,       // 8
+  0x20202000,       // 8  - black
   0xe0202000,       // 9  - red
   0x20e02000,       // 10 - grn
   0xe0e02000,       // 11 - yel
