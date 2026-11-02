@@ -615,8 +615,8 @@ int Fl_PTY_Terminal::handle(int event) {
       return 1;
     }
     if (key == FL_F + 12) {
-      if (state & FL_CTRL) {
-         // Ctrl-F12 switches the standard color palette
+      if (state & (FL_CTRL|FL_ALT)) {
+         // Ctrl/ALt-F12 switches the standard color palette
          toggle_default_colors();
          return 1;
       }
