@@ -922,6 +922,7 @@ private:
 protected:
   bool           alternate_buffer() const  { return alternate_buffer_; }
   bool           bracketed_paste() const  { return bracketed_paste_; }
+  bool           scroll_region_set() const { return ring_.scroll_top() || ring_.scroll_bottom(); }
   std::string    window_title_;     // buffer to store window title set from OSC command
   Fl_Rect        scrn_;             // terminal screen xywh inside box(), margins, and scrollbar
 
@@ -1075,7 +1076,6 @@ private:
   void handle_esc(void);
   bool osc_command(const char *cmd_);
   void set_scroll_region(int top, int bottom);
-  bool scroll_region_set() const { return ring_.scroll_top() || ring_.scroll_bottom(); }
   void toggle_alternate_buffer(bool on);
   bool handle_private_mode(int mode, int cmd);
   bool validate_cursor(bool do_scroll);

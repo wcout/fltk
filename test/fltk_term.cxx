@@ -65,6 +65,8 @@ protected:
   bool init();
   void quit();
   void reset() override;
+  void set_pty_size();
+  virtual void notify(int reason, const std::string &buf = "") {}
 public:
   void dump(const char *buf, size_t n);
   void input(const std::string& buffer);
@@ -672,9 +674,9 @@ void Fl_PTY_Terminal::snap_to_grid(void) {
   int rows = h_to_row(scrn_.h());
   resize_display_columns(cols);       // change columns to screen width
   default_tabstops();                 // reset tabstops to default 8 char
-  int W = w();
-  int H = h();
+  int W, H;
   char_to_pixel_dimension(cols, rows, W, H); // align to character boundaries if on PTY
+  set_pty_size();
   if (W != w() || H != h()) {
     Fl_Group::size(W, H);             // IMPORTANT: tell bash the new disp_rows(), disp_cols()!
     do_callback(this, nullptr, (Fl_Callback_Reason)Fl_Terminal::FL_REASON_SIZE_CHANGE);
@@ -729,13 +731,19 @@ void Fl_PTY_Terminal::resize(int X, int Y, int W, int H) {
     Fl::add_timeout(0.1, snap_to_grid_cb, this);
   }
 
+  set_pty_size();
+}
+
+void Fl_PTY_Terminal::set_pty_size() {
   // Only change, when PTY is already active
   if (pty_master_fd_ != -1) {
     // Calculate columns and rows for current size
+    int W = w();
+    int H = h();
     int columns = display_columns();
     int rows    = display_rows();
     if (log_) {
-      fprintf(logfile_, "resized to: %d x %d\n", columns, rows);
+      fprintf(logfile_, "resized to: %d x %d (%d x %d px)\n", columns, rows, W, H);
     }
 
     // Prevent invalid values by extreme minimize
