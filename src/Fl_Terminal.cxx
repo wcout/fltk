@@ -3053,7 +3053,7 @@ bool Fl_Terminal::osc_command(const char *cmd) {
       int r = std::stoul(c.substr(4).c_str(), nullptr, 16);
       int g = std::stoul(c.substr(7).c_str(), nullptr, 16);
       int b = std::stoul(c.substr(10).c_str(), nullptr, 16);
-      mode == 11 ? color(fl_rgb_color(r, g, b)) : cursorbgcolor(fl_rgb_color(r, g, b));
+      mode == 11 ? color(rgb(r, g, b)) : cursorbgcolor(rgb(r, g, b));
       return true;
     } else if (c.find("#") == 0 && c.size() == 7) {
       // set background/cursor color: support for '#RRGGBB'
