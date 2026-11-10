@@ -2080,7 +2080,6 @@ const Fl_Terminal::Utf8Char* Fl_Terminal::walk_selection(
   if (u8c==NULL) {
     int erow,ecol;      // unused
     if (!get_selection(row,col,erow,ecol)) return NULL; // no selection
-    u8c = u8c_ring_row(row);
   } else {
     int srow,scol,erow,ecol;
     if (!get_selection(srow,scol,erow,ecol)) return NULL; // no selection
@@ -2877,7 +2876,7 @@ bool Fl_Terminal::is_ctrl(char c) {
 //
 void Fl_Terminal::handle_SGR(void) {     // ESC[...m?
   // Shortcut varnames..
-  EscapeSeq &esc = escseq;
+  const EscapeSeq &esc = escseq;
   int tot = esc.total_vals();
   // Handle ESC[m or ESC[;m
   if (tot == 0)
@@ -3061,7 +3060,7 @@ bool Fl_Terminal::osc_command(const char *cmd) {
       bg <<= 8;
       mode == 11 ? color(bg) : cursorbgcolor(bg);
       return true;
-    } else if(c.find("?") == 0) {
+    } else if (c.find("?") == 0) {
       // query current background/cursor color
       uchar r, g, b;
       Fl::get_color(mode == 11 ? current_style_->ctrstcolor() : cursor_.bgcolor(), r, g, b);

@@ -178,25 +178,13 @@ void Fl_PTY_Terminal::dump(const char *buf, size_t n) {
   static const char CTRL[] = "\033[1m\033[32m";
   static const char OFF[] = "\033[0m";
 
-  bool space(false);
   for (size_t i = 0; i < n; i++) {
     unsigned int c = (unsigned char)buf[i];
     if (c == 27) {
-      if (space) {
-        fprintf(logfile_, " ");
-      }
       fprintf(logfile_, "%s\\e%s", BOLD, OFF);
-      space = false;
     } else if (c >= ' ' && c <= 127) {
-      if (space) {
-        fprintf(logfile_, " ");
-      }
       fprintf(logfile_, "%s%c%s", TEXT, c, OFF);
-      space = false;
     } else {
-      if (space) {
-        fprintf(logfile_, " ");
-      }
       switch (c) {
         case '\r':
           fprintf(logfile_, "%s\\r%s", CTRL, OFF);
@@ -213,7 +201,6 @@ void Fl_PTY_Terminal::dump(const char *buf, size_t n) {
         default:
           fprintf(logfile_, "%s\\x%02X%s", HEX, (unsigned char)c, OFF);
       }
-//			space = true; // NOTE: not needed any more
     }
   }
   fprintf(logfile_, "\n");
@@ -956,7 +943,7 @@ int main(int argc, char** argv) {
         return;
       default:                                     // ANSI command not implemented
         if (log_ && buf && reason >= Fl_Terminal::FL_REASON_NOT_IMPL) {
-           fprintf(logfile ? logfile : stderr, "Fl_Terminal NOT IMPLEMENTED (%d): ", reason);
+         fprintf(logfile ? logfile : stderr, "Fl_Terminal NOT IMPLEMENTED (%d): ", reason);
          term->dump(buf, strlen(buf));
         }
     }
