@@ -3,7 +3,7 @@
    Fully workable FLTK interactive terminal based on
    an improved 'Fl_Terminal' widget.
 
-   (c) 2026 wcout@gmx.net
+   (c) 2026 wcout
 
    It is running many applications like editors (vim) and
    tools like w3m or btop nearly perfectly.
@@ -774,6 +774,15 @@ void Fl_PTY_Terminal::command(const char *cmd) {
 //
 //  FLTK-Term application
 //
+
+#include <string>
+#include <sstream>
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <FL/Fl.H>
+#include <FL/Fl_Double_Window.H>
+
 static const int BORDER = 0; // border between window and terminal widget
 static int log_ = 0;
 static int no_splash = 0;
@@ -786,6 +795,7 @@ static Fl_Color color = fl_rgb_color(FL_WHITE);
 static int fontsize = 0;
 static int alt_colors = 0;
 static std::string cmd; // initial command (none)
+static std::string splash; // splash screen
 
 void parse_command_line(int argc, char *argv[]) {
   auto geometry = [&](const std::string &s, int &W, int &H) ->void {
@@ -870,10 +880,42 @@ void parse_command_line(int argc, char *argv[]) {
       }
     }
   }
-}
+} //parse_command_line
 
-#include <FL/Fl.H>
-#include <FL/Fl_Double_Window.H>
+const std::string create_splash(Fl_PTY_Terminal &term) {
+  std::ostringstream os;
+  std::string pad = std::string(std::max((term.display_columns() - 80) / 2, 0), ' ');
+  os << "\x1b[?1049h";                    // use alternate buffer
+  os << "\x1b[2J\x1b[H\x1b[?25l\x1b[?7l"; // cls+home, cursor off, wrap off
+  os << "\n";
+  os << "\x1b[34m";
+  os << pad << "    ███████╗██╗     ████████╗██╗  ██╗    ████████╗███████╗██████╗ ███╗   ███╗\n";
+  os << pad << "    ██╔════╝██║     ╚══██╔══╝██║ ██╔╝    ╚══██╔══╝██╔════╝██╔══██╗████╗ ████║\n";
+  os << pad << "    █████╗  ██║        ██║   █████╔╝        ██║   █████╗  ██████╔╝██╔████╔██║\n";
+  os << pad << "    ██╔══╝  ██║        ██║   ██╔═██╗        ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║\n";
+  os << pad << "    ██║     ███████╗   ██║   ██║  ██╗       ██║   ███████╗██║  ██║██║ ╚═╝ ██║\n";
+  os << pad << "    ╚═╝     ╚══════╝   ╚═╝   ╚═╝  ╚═╝       ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝\n";
+  os << "\x1b[32m\n";
+  os << "\x1b[K\n";
+  os << pad << "          ╔═╗    ╔═╗      ╔═══╗╔═══╗╔═══╗╔═══╗                       ╔╗\x1b[K\n";
+  os << pad << "         ╔╝╔╝    ╚╗╚╗     ║╔═╗║║╔═╗║║╔═╗║║╔══╝                      ╔╝╚╗\x1b[K\n";
+  os << pad << "        ╔╝╔╝ ╔══╗ ╚╗╚╗    ╚╝╔╝║║║ ║║╚╝╔╝║║╚══╗    ╔╗╔╗╔╗╔══╗╔══╗╔╗╔╗╚╗╔╝\x1b[K\n";
+  os << pad << "        ║║║  ║╔═╝  ║║║    ╔═╝╔╝║║ ║║╔═╝╔╝║╔═╗║    ║╚╝╚╝║║╔═╝║╔╗║║║║║ ║║\x1b[K\n";
+  os << pad << "        ║║║  ║╚═╗  ║║║    ║║╚═╗║╚═╝║║║╚═╗║╚═╝║    ╚╗╔╗╔╝║╚═╗║╚╝║║╚╝║ ║╚╗\x1b[K\n";
+  os << pad << "        ╚╗╚╗ ╚══╝ ╔╝╔╝    ╚═══╝╚═══╝╚═══╝╚═══╝     ╚╝╚╝ ╚══╝╚══╝╚══╝ ╚═╝\x1b[K\n";
+  os << pad << "         ╚╗╚╗    ╔╝╔╝\x1b[K\n";
+  os << pad << "          ╚═╝    ╚═╝\x1b[K\n";
+  os << "\x1b[0m";
+  os << "\n";
+  os << "\n";
+  os << pad << "=== 1. System Colors (Indices 0 - 15) ===\n";
+  os << pad << "Standard Colors:\n";
+  os << pad << "[48;5;0m   0 [0m[48;5;1m   1 [0m[48;5;2m   2 [0m[48;5;3m   3 [0m[48;5;4m   4 [0m[48;5;5m   5 [0m[48;5;6m   6 [0m[48;5;7m   7 [0m\n";
+  os << pad << "Bright Colors:\n";
+  os << pad << "[48;5;8m   8 [0m[48;5;9m   9 [0m[48;5;10m  10 [0m[48;5;11m  11 [0m[48;5;12m  12 [0m[48;5;13m  13 [0m[48;5;14m  14 [0m[48;5;15m  15 [0m";
+  os << "\x1b[0m";
+  return os.str();
+}
 
 int main(int argc, char** argv) {
   parse_command_line(argc, argv);
@@ -908,6 +950,7 @@ int main(int argc, char** argv) {
 
   // create window in just the right size
   Fl_Double_Window win(term_w + 2 * BORDER, term_h + 2 * BORDER, "FLTK Terminal");
+  win.xclass("fltk_term");
   win.add(term); // now add the terminal to it
   win.resizable(term);
 
@@ -932,6 +975,7 @@ int main(int argc, char** argv) {
         return;
       }
       case Fl_Terminal::FL_REASON_COLOR_CHANGE:    // background color changed
+        term->scrollbar->color(term->color());
         term->window()->color(term->color());
         term->window()->redraw();
         return;
@@ -954,19 +998,28 @@ int main(int argc, char** argv) {
     term.history_lines(history_lines);
   }
   if (cmd.empty() && !no_splash) {
-    cmd =
-#ifdef _WIN32
-#include "fltk_term_splash_win32.h"
-#else
-#include "fltk_term_splash_linux.h"
-#endif
-    ;
+    splash = create_splash(term);
   }
-  if (cmd.size()) {
+  if (cmd.size() || splash.size()) {
     // delay command to let terminal initialize completely before
     Fl::add_timeout(0.2, [](void *d) {
       Fl_PTY_Terminal *term = (Fl_PTY_Terminal *)d;
-      term->command(cmd.c_str());
+      cmd.size() ? term->command(cmd.c_str()) : term->append_utf8(splash.c_str());
+      if (splash.size()) {
+        bool wait = true;
+        Fl::add_timeout(3., [](void *d) {
+          bool *wait = (bool *)d;
+          *wait = false;
+        }, &wait);
+        while (wait) Fl::check();
+        // cleanup after splash      FIXME: how to better regain prompt on all platforms
+        term->append_utf8("\033c"); // reset
+#ifndef _WIN32
+        term->command("clear");     // restore bash prompt
+#else
+        term->command("\n");        // that works for cmd.exe
+#endif
+      }
     }, terminal);
   }
 
