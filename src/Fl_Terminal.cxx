@@ -2486,11 +2486,11 @@ void Fl_Terminal::char_to_pixel_dimension(int cols, int rows, int &W, int &H) co
   mouse selection, homes cursor, resets tabstops. Same as \c "<ESC>c"
 */
 void Fl_Terminal::reset_terminal(void) {
+  reset_modes();
   int cols = w_to_col(scrn_.w());
   int rows = h_to_row(scrn_.h());
-  int hrows = history_lines();
   //DEBUG fprintf(stderr, "scrn: %d x %d => %d x %d / %d x %d\n", scrn_.w(), scrn_.h(), cols, rows, disp_cols(), disp_rows());
-  reset_modes();
+  int hrows = history_lines();
   current_style_->sgr_reset();        // reset current style
   clear_screen_home();                // clear screen, home cursor
   clear_history();
@@ -3108,7 +3108,7 @@ void Fl_Terminal::toggle_alternate_buffer(bool on) {
     *current_style_ = saved_char_style;
     cursor_ = saved_cursor;
     resize(x(), y(), w(), h());
-    // handle background color changed while in alterenate buffer
+    // handle background color changed while in alternate buffer
     if (color() != current_style_->ctrstcolor()) {
       color(color());
     }
