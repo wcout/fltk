@@ -640,11 +640,27 @@ int Fl_PTY_Terminal::handle(int event) {
     }
 
     // Standard textinput (normal chars and Enter)
+    static int del = 0;
     const char* text = Fl::event_text();
     int len = Fl::event_length();
-    if (len > 0) {
-      write_pty(text, len);
+    int dummy;
+    Fl::compose(dummy);
+    //std::string buf(text, len);
+    //fprintf(stderr, "del=%d, text='%s' (%d) state=%d\n", del, buf.c_str(), len, Fl::compose_state);
+    if (len > 0 && !Fl::compose_state) {
+      if (del) write_pty("\x08", 1); // Backspace
+      // Fl_Terminal can't handle character combining via 'Combining Accute Accent' (0xCC81)
+      if (!(len == 3 && (uchar)text[1] == 0xCC && (uchar)text[2] == 0x81))
+        write_pty(text, len);
+      del = 0;
       return 1;
+    } else if (len > 0 && Fl::compose_state) {
+      if (!del) {
+        del = 1;
+        // write initial compose character
+        write_pty(text, len);
+        return 1;
+      }
     }
   }
   if (handle_dnd(event)) {
