@@ -4037,7 +4037,6 @@ Fl_Terminal::~Fl_Terminal(void) {
   if (redraw_timer_)
     { Fl::remove_timeout(redraw_timer_cb, this); redraw_timer_ = false; }
   Fl::remove_timeout(set_window_title_cb, this);
-  Fl::remove_timeout(cursor_blink, this);
   delete current_style_;
 }
 
@@ -4254,7 +4253,10 @@ void Fl_Terminal::draw_row(int grow, int Y) const {
           case 6:
             fl_rectf(cx, cy, 1, ch); break;                  // VERTICAL LINE
         }
-
+        if (Fl::compose_state) {                             // indicate compose state
+           fl_color(fl_contrast(0x00ff0000, fl_color()));    // with green
+           fl_rect(cx + 1, cy + 1, cw - 2, ch - 2);          // inset box
+        }
       } else fl_rect(cx, cy, cw, ch);
     }
     // DRAW TEXT
@@ -4266,13 +4268,12 @@ void Fl_Terminal::draw_row(int grow, int Y) const {
     else if (is_selection) {                                 // text in mouse selection?
       fg = inverse ? u8c->fgcolor() : u8c->bgcolor();
       if (fg == NoColor || !select_.dynamic_color()) fg = selectionfgcolor();
-      fg = fl_contrast(fg, bg[off]);
     }
     else fg = inverse
       ? u8c->attr_bg_color(this) == NoColor ? current_style_->ctrstcolor() : u8c->attr_bg_color(this)                            // ..use char's bg color for fg
       : u8c->attr_fg_color(current_style_->defaultfgcolor());      // ..use char's fg color for fg
 
-    if (is_cursor && cursor_.dynamic_color()) fg = fl_contrast(fg, cbg);
+    if (is_cursor && cursor_.dynamic_color()) fg = (Fl::focus() == this) ? fl_contrast(fg, cbg) : fl_contrast(fg, bg[off]);
     else if (is_selection) fg = fl_contrast(fg, bg[off]);    // ensure it has enough contrast to row bg
     fl_color(fg);
     // 2) Font for text - already set by u8c->fl_font_set() in the above
@@ -4518,7 +4519,8 @@ int Fl_Terminal::handle(int e) {
   if (Fl::event_inside(scrollbar) ||
       Fl::event_inside(hscrollbar)) {
     set_app_cursor(FL_CURSOR_DEFAULT);           // change cursor over scrollbars to default
-    return ret;                                  // early exit for scrollbar/hscrollbar
+    if (e != FL_FOCUS && e != FL_UNFOCUS)        // let focus events through to main screen
+      return ret;                                // early exit for scrollbar/hscrollbar
   }
   switch (e) {
     case FL_MOVE:
