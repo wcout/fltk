@@ -44,6 +44,7 @@ Fl_Window_Driver::Fl_Window_Driver(Fl_Window *win)
   wait_for_expose_value = 0;
   other_xid = 0;
   screen_num_ = 0;
+  current_cursor_ = FL_CURSOR_DEFAULT;
 }
 
 
@@ -208,8 +209,9 @@ void Fl_Window_Driver::wait_for_expose() {
 }
 
 int Fl_Window_Driver::screen_num() {
-  if (pWindow->parent()) {
-    screen_num_ = Fl_Window_Driver::driver(pWindow->top_window())->screen_num();
+  Fl_Window *top = pWindow->top_window();
+  if (top && pWindow->parent()) {
+    screen_num_ = Fl_Window_Driver::driver(top)->screen_num();
   }
   return screen_num_ >= 0 ? screen_num_ : 0;
 }
@@ -312,6 +314,12 @@ void Fl_Window_Driver::un_maximize() {
   *no_fullscreen_y() = 0;
   *no_fullscreen_w() = 0;
   *no_fullscreen_h() = 0;
+}
+
+
+float Fl_Window_Driver::pixels_per_unit()
+{
+  return Fl::screen_driver()->scale(screen_num());
 }
 
 /**

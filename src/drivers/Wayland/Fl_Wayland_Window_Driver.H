@@ -1,7 +1,7 @@
 //
 // Definition of Wayland window driver for the Fast Light Tool Kit (FLTK).
 //
-// Copyright 2010-2025 by Bill Spitzak and others.
+// Copyright 2010-2026 by Bill Spitzak and others.
 //
 // This library is free software. Distribution and use rights are outlined in
 // the file "COPYING" which should have been included with this file.  If this
@@ -61,13 +61,11 @@ private:
   bool can_expand_outside_parent_; // specially to allow window docking (#987)
   cairo_rectangle_int_t *subRect_;   // makes sure subwindow remains inside its parent window
   static bool in_flush_; // useful for progressive window drawing
-  Fl_Cursor standard_cursor_; // window's standard custom kind
   struct gl_start_support *gl_start_support_; // for support of gl_start/gl_finish
   bool is_popup_window_;
   bool previous_border_; // records whether window before being turned fullscreen had a border
   void activate_(Fl_Window *);
 public:
-  inline Fl_Cursor standard_cursor() { return standard_cursor_; }
   bool in_handle_configure; // distinguish OS and user window resize
 
   struct surface_output { // for linked list of displays where a surface maps
@@ -145,6 +143,7 @@ public:
   bool process_menu_or_tooltip(struct wld_window *);
   static Fl_Window *previous_floatingtitle; // to support floating menuwindow w/ title
   void allow_expand_outside_parent() override { can_expand_outside_parent_ = true; }
+  float pixels_per_unit() override;
 };
 
 
@@ -178,9 +177,7 @@ struct wld_window {
 
 class Fl_Wayland_Plugin : public Fl_Plugin {
 public:
-  Fl_Wayland_Plugin(const char *pluginName)  : Fl_Plugin(klass(), pluginName) { }
-  virtual const char *klass() { return "wayland.fltk.org"; }
-  virtual const char *name() = 0;
+  Fl_Wayland_Plugin(const char *pluginName) : Fl_Plugin("wayland.fltk.org", pluginName) { }
   virtual void do_swap(Fl_Window*) = 0;
   virtual void invalidate(Fl_Window*) = 0;
   virtual void terminate() = 0;

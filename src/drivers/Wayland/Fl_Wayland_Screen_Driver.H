@@ -54,6 +54,7 @@ public:
     int pointer_scale;
     uint32_t serial;
     uint32_t pointer_enter_serial;
+    Fl_Window *last_keydown_window;
     struct wl_data_device_manager *data_device_manager;
     struct wl_data_device *data_device;
     struct wl_data_source *data_source;
@@ -175,6 +176,7 @@ public:
   void disable_im() FL_OVERRIDE;
   bool screen_boundaries_known() FL_OVERRIDE { return false; }
   float base_scale(int numscreen) FL_OVERRIDE;
+  int screen_count() override;
 
   // overridden functions from parent class Fl_Unix_Screen_Driver
   int poll_or_select_with_delay(double time_to_wait) FL_OVERRIDE;

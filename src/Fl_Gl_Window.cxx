@@ -523,16 +523,6 @@ int Fl_Gl_Window::gl_plugin_linkage() {
   return fl_gl_load_plugin;
 }
 
-/** The number of pixels per FLTK unit of length for the window.
- This method dynamically adjusts its value when the GUI is rescaled or when the window
- is moved to/from displays of distinct resolutions. This method is useful, e.g., to convert,
- in a window's handle() method, the FLTK units returned by Fl::event_x() and
- Fl::event_y() to the pixel units used by the OpenGL source code.
- \version 1.3.4
- */
-float Fl_Gl_Window::pixels_per_unit() {
-  return pGlWindowDriver->pixels_per_unit();
-}
 
 /**
  \cond DriverDev
@@ -591,7 +581,10 @@ Fl_Font_Descriptor** Fl_Gl_Window_Driver::fontnum_to_fontdescriptor(int fnum) {
 Fl_RGB_Image* Fl_Gl_Window_Driver::capture_gl_rectangle(int x, int y, int w, int h)
 {
   Fl_Gl_Window *glw = pWindow;
-  glw->flush(); // forces a GL redraw, necessary for the glpuzzle demo
+  glw->make_current();
+  glw->draw();
+  if (overlay() == pWindow) glw->draw_overlay();
+
   // Read OpenGL context pixels directly.
   // For extra safety, save & restore OpenGL states that are changed
   glPushClientAttrib(GL_CLIENT_PIXEL_STORE_BIT);

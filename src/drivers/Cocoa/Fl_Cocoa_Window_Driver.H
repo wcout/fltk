@@ -2,7 +2,7 @@
 // Definition of Apple Cocoa window driver
 // for the Fast Light Tool Kit (FLTK).
 //
-// Copyright 2010-2025 by Bill Spitzak and others.
+// Copyright 2010-2026 by Bill Spitzak and others.
 //
 // This library is free software. Distribution and use rights are outlined in
 // the file "COPYING" which should have been included with this file.  If this
@@ -155,13 +155,12 @@ public:
   NSImage *icon_image;
 
   fl_uintptr_t os_id() FL_OVERRIDE;
+  float pixels_per_unit() override;
 };
 
 class Fl_Cocoa_Plugin : public Fl_Plugin {
 public:
-  Fl_Cocoa_Plugin(const char *pluginName)  : Fl_Plugin(klass(), pluginName) { }
-  virtual const char *klass() { return "fltk:cocoa"; }
-  virtual const char *name() = 0;
+  Fl_Cocoa_Plugin(const char *pluginName)  : Fl_Plugin("fltk:cocoa", pluginName) { }
   virtual void resize(Fl_Gl_Window *glw, int x, int y, int w, int h) = 0;
 };
 

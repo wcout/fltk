@@ -25,10 +25,15 @@
 
 Fl_GDI_Image_Surface_Driver::Fl_GDI_Image_Surface_Driver(int w, int h, int high_res, Fl_Offscreen off) : Fl_Image_Surface_Driver(w, h, high_res, off) {
   Fl_Display_Device::display_device(); // make sure fl_graphics_driver was initialized
-  float d =  fl_graphics_driver->scale();
-  if (!off && d != 1 && high_res) {
-    w = int(w*d);
-    h = int(h*d);
+  float d = 1;
+  if (high_res) {
+    Fl_Window *model_win = Fl_Window::current();
+    if (!model_win) model_win = Fl::first_window();
+    if (model_win) d = Fl::screen_driver()->scale(model_win->screen_num());
+    if (!off && d != 1) {
+      w = int(w*d);
+      h = int(h*d);
+    }
   }
   HDC gc = (HDC)Fl_Graphics_Driver::default_driver().gc();
   offscreen = off ? off : (Fl_Offscreen)CreateCompatibleBitmap( (gc ? gc : fl_GetDC(0) ) , w, h);

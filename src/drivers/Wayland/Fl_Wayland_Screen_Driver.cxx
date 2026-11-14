@@ -266,7 +266,7 @@ static void pointer_enter(void *data, struct wl_pointer *wl_pointer, uint32_t se
     fl_wl_xid(win)->custom_cursor ? fl_wl_xid(win)->custom_cursor->wl_cursor : NULL;
   seat->serial = serial;
   seat->pointer_enter_serial = serial;
-  Fl_Wayland_Screen_Driver::do_set_cursor(seat, cursor, Fl_Wayland_Window_Driver::driver(win)->standard_cursor());
+  Fl_Wayland_Screen_Driver::do_set_cursor(seat, cursor, Fl_Window_Driver::driver(win)->current_cursor());
   checkdouble(); // fix for #1383
   set_event_xy(win);
   need_leave = NULL;
@@ -509,7 +509,7 @@ static void cursor_surface_enter(void *data,
     struct wld_window *xid = fl_wl_xid(win);
     if (xid->custom_cursor) Fl_Wayland_Screen_Driver::do_set_cursor(seat, xid->custom_cursor->wl_cursor);
     else if (driver->cursor_default()) driver->set_cursor(driver->cursor_default());
-    else win->cursor(driver->standard_cursor());
+    else win->cursor(driver->current_cursor());
   }
 }
 
@@ -670,7 +670,7 @@ static void wl_keyboard_enter(void *data, struct wl_keyboard *wl_keyboard,
 
 struct key_repeat_data_t {
   uint32_t serial;
-  Fl_Window *window;
+  Fl_Window **key_repeat_window;
 };
 
 static double key_repeat_delay = 0.5; // sec
@@ -678,8 +678,9 @@ static double key_repeat_interval = 0.05;  // sec
 
 
 static void key_repeat_timer_cb(key_repeat_data_t *key_repeat_data) {
-  if (last_keydown_serial == key_repeat_data->serial && key_repeat_interval > 0) {
-    Fl::handle(FL_KEYDOWN, key_repeat_data->window);
+  if (*key_repeat_data->key_repeat_window && last_keydown_serial == key_repeat_data->serial &&
+      key_repeat_interval > 0) {
+    Fl::handle(FL_KEYDOWN, *key_repeat_data->key_repeat_window);
     Fl::add_timeout(key_repeat_interval, (Fl_Timeout_Handler)key_repeat_timer_cb, key_repeat_data);
   }
   else delete key_repeat_data;
@@ -917,8 +918,9 @@ static void wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
     // but not under Ubuntu/KDE !
     key_repeat_data_t *key_repeat_data = new key_repeat_data_t;
     key_repeat_data->serial = serial;
-    key_repeat_data->window = win;
+    key_repeat_data->key_repeat_window = &seat->last_keydown_window;
     last_keydown_serial = serial;
+    seat->last_keydown_window = win;
     Fl::add_timeout(key_repeat_delay, (Fl_Timeout_Handler)key_repeat_timer_cb,
                     key_repeat_data);
   }
@@ -1077,6 +1079,7 @@ void text_input_done(void *data, struct zwp_text_input_v3 *zwp_text_input_v3,
       }
   }
   if (pending_commit) {
+    Fl::remove_timeout((Fl_Timeout_Handler)key_repeat_timer_cb);
     send_text_to_fltk(pending_commit, false, current_surface);
     free(pending_commit); pending_commit = NULL;
   }
@@ -1726,6 +1729,20 @@ void Fl_Wayland_Screen_Driver::close_display() {
 }
 
 
+static uint32_t is_surface_fullscreen_or_maximized(struct wl_array *states)
+{
+  uint32_t *p;
+  // Replace wl_array_for_each(p, states) rejected by C++
+  for (p = (uint32_t *)(states->data);
+       (const char *) p < ((const char *)states->data + states->size);
+       (p)++) {
+    if (*p == XDG_TOPLEVEL_STATE_FULLSCREEN) return XDG_TOPLEVEL_STATE_FULLSCREEN;
+    if (*p == XDG_TOPLEVEL_STATE_MAXIMIZED) return XDG_TOPLEVEL_STATE_MAXIMIZED;
+  }
+  return 0;
+}
+
+
 struct configure_s { int W, H; uint32_t state; };
 
 static void xdg_toplevel_configure(void *v, struct xdg_toplevel *xdg_toplevel,
@@ -1734,7 +1751,7 @@ static void xdg_toplevel_configure(void *v, struct xdg_toplevel *xdg_toplevel,
   struct configure_s *data = (struct configure_s*)v;
   data->W = width;
   data->H = height;
-  data->state = (width && height && states ? *(uint32_t *)(states->data) : 0);
+  data->state = (width && height && states ? is_surface_fullscreen_or_maximized(states) : 0);
 }
 
 static const struct xdg_toplevel_listener xdg_toplevel_listener = {
@@ -1742,50 +1759,88 @@ static const struct xdg_toplevel_listener xdg_toplevel_listener = {
 };
 
 
-static bool compute_full_and_maximized_areas(Fl_Wayland_Screen_Driver::output *output,
-                                             int& Wfullscreen, int& Hfullscreen,
-                                             int& Wworkarea, int& Hworkarea) {
+static bool compute_full_and_maximized_areas(Fl_Wayland_Screen_Driver::output **p_output,
+                                             int *p_W, int *p_H) {
   if (Fl_Wayland_Screen_Driver::compositor == Fl_Wayland_Screen_Driver::unspecified) {
-    Wfullscreen = 0;
     return false;
   }
-  bool found_workarea = false;
   Fl_Wayland_Screen_Driver *scr_driver = (Fl_Wayland_Screen_Driver*)Fl::screen_driver();
-  struct wl_surface *wl_surface = wl_compositor_create_surface(scr_driver->wl_compositor);
-  wl_surface_set_opaque_region(wl_surface, NULL);
-  struct xdg_surface *xdg_surface = xdg_wm_base_get_xdg_surface(scr_driver->xdg_wm_base, wl_surface);
-  struct xdg_toplevel *xdg_toplevel = xdg_surface_get_toplevel(xdg_surface);
-  struct configure_s data = {0, 0, 0};
-  xdg_toplevel_add_listener(xdg_toplevel, &xdg_toplevel_listener, &data);
-  xdg_toplevel_set_fullscreen(xdg_toplevel, output->wl_output);
-  wl_surface_commit(wl_surface); // necessary under KWin
-  while (data.state != XDG_TOPLEVEL_STATE_FULLSCREEN)
-    wl_display_dispatch(Fl_Wayland_Screen_Driver::wl_display);
-  Wfullscreen = data.W * output->wld_scale;
-  Hfullscreen = data.H * output->wld_scale;
-  if (Wfullscreen && Hfullscreen && wl_list_length(&scr_driver->outputs) == 1) {
-    xdg_toplevel_unset_fullscreen(xdg_toplevel);
-    xdg_toplevel_set_maximized(xdg_toplevel);
-    wl_surface_commit(wl_surface); // necessary under KWin
-    while (data.state != XDG_TOPLEVEL_STATE_MAXIMIZED)
+  int count = wl_list_length(&scr_driver->outputs);
+  if (count == 0) return false;
+  bool found_workarea = false;
+  int Wfullscreen, Hfullscreen, Wworkarea, Hworkarea;
+  struct wl_surface **wl_surfaces = new struct wl_surface*[count];
+  struct xdg_surface **xdg_surfaces = new struct xdg_surface*[count];
+  struct xdg_toplevel **xdg_toplevels = new struct xdg_toplevel*[count];
+  struct configure_s *data = new struct configure_s[count];
+  Fl_Wayland_Screen_Driver::output *output;
+  // put one fullscreen surface on each screen, get their configured size
+  int ns = 0;
+  wl_list_for_each(output, &scr_driver->outputs, link) {
+    wl_surfaces[ns] = wl_compositor_create_surface(scr_driver->wl_compositor);
+    wl_surface_set_opaque_region(wl_surfaces[ns], NULL);
+    xdg_surfaces[ns] = xdg_wm_base_get_xdg_surface(scr_driver->xdg_wm_base, wl_surfaces[ns]);
+    xdg_toplevels[ns] = xdg_surface_get_toplevel(xdg_surfaces[ns]);
+    xdg_toplevel_add_listener(xdg_toplevels[ns], &xdg_toplevel_listener, &data[ns]);
+    data[ns].state = 0;
+    xdg_toplevel_set_fullscreen(xdg_toplevels[ns], output->wl_output);
+    wl_surface_commit(wl_surfaces[ns]); // necessary under KWin
+    while (data[ns].state != XDG_TOPLEVEL_STATE_FULLSCREEN)
       wl_display_dispatch(Fl_Wayland_Screen_Driver::wl_display);
-    Wworkarea = data.W * output->wld_scale;
-    Hworkarea = data.H * output->wld_scale;
-    if (Hworkarea < Hfullscreen && Hworkarea > Hfullscreen - (50 * output->wld_scale))
-      found_workarea = true;
-    if (Wworkarea < Wfullscreen && Wworkarea > Wfullscreen - (50 * output->wld_scale))
-      found_workarea = true;
-  } else {
-    Wworkarea = Wfullscreen;
-    Hworkarea = Hfullscreen;
+    Wfullscreen = data[ns].W * output->wld_scale;
+    Hfullscreen = data[ns].H * output->wld_scale;
+    if (Wfullscreen && Hfullscreen) {
+      output->width = Wfullscreen; // pixels
+      output->height = Hfullscreen; // pixels
+      /*int d = output->wld_scale;
+      int fractional_scale = int(100 * (output->pixel_width / float(Wfullscreen/d)));
+      printf("fullscreen=%dx%d fractional_scale=%d%%  wld_s=%d\n",
+             Wfullscreen/d,Hfullscreen/d,fractional_scale,d);*/
+    }
+    ns++;
   }
-  xdg_toplevel_destroy(xdg_toplevel);
-  xdg_surface_destroy(xdg_surface);
-  wl_surface_destroy(wl_surface);
-  /*int d = output->wld_scale;
-  int fractional_scale = int(100 * (output->pixel_width / float(Wfullscreen/d)));
-  printf("fullscreen=%dx%d workarea=%dx%d  fractional_scale=%d%%  wld_s=%d\n",
-         Wfullscreen/d,Hfullscreen/d,Wworkarea/d,Hworkarea/d,fractional_scale,d);*/
+
+  if (Fl_Wayland_Screen_Driver::compositor == Fl_Wayland_Screen_Driver::WAYFIRE) goto way_out;
+
+  // for each screen, change the surface from fullscreen to maximized, other surfaces unchanged
+  ns = 0;
+  wl_list_for_each(output, &scr_driver->outputs, link) {
+    data[ns].state = 0;
+    xdg_toplevel_unset_fullscreen(xdg_toplevels[ns]);
+    xdg_toplevel_set_maximized(xdg_toplevels[ns]);
+    wl_surface_commit(wl_surfaces[ns]);
+    while (data[ns].state != XDG_TOPLEVEL_STATE_MAXIMIZED)
+      wl_display_dispatch(Fl_Wayland_Screen_Driver::wl_display);
+    Wworkarea = data[ns].W * output->wld_scale;
+    Hworkarea = data[ns].H * output->wld_scale;
+    if ( (Hworkarea < output->height && Hworkarea > output->height - (100 * output->wld_scale)) ||
+        (Wworkarea < output->width && Wworkarea > output->width - (100 * output->wld_scale)) ) {
+      found_workarea = true;
+      *p_output = output;
+      *p_W = Wworkarea;
+      *p_H = Hworkarea;
+      if (count > 1 && ns > 0) { // put this screen first in list of screens
+        wl_list_remove(&output->link);
+        wl_list_insert(&scr_driver->outputs, &output->link);
+      }
+      break;
+    }
+    xdg_toplevel_unset_maximized(xdg_toplevels[ns]);
+    xdg_toplevel_set_fullscreen(xdg_toplevels[ns], output->wl_output);
+    wl_surface_commit(wl_surfaces[ns]);
+    ns++;
+  }
+
+way_out:
+  for (ns = 0; ns < count; ns++) {
+    xdg_toplevel_destroy(xdg_toplevels[ns]);
+    xdg_surface_destroy(xdg_surfaces[ns]);
+    wl_surface_destroy(wl_surfaces[ns]);
+  }
+  delete[] xdg_toplevels;
+  delete[] xdg_surfaces;
+  delete[] wl_surfaces;
+  delete[] data;
   return found_workarea;
 }
 
@@ -1794,10 +1849,10 @@ static int workarea_xywh[4] = { -1, -1, -1, -1 };
 
 /* Implementation note about computing work area and about handling fractional scaling.
 
- FLTK computes 2 pairs of (WxH) values for each display:
- 1) (pixel_width x pixel_height) gives the size in pixel of a display. It's unchanged by
+ FLTK computes 2 pairs of (WxH) values for each screen:
+ 1) (pixel_width x pixel_height) gives the size in pixel of a screen. It's unchanged by
  any scaling applied by the compositor; it's assigned by function output_mode().
- 2) (width x height) gives the size in pixels of a buffer that would fully cover the display.
+ 2) (width x height) gives the size in pixels of a buffer that would fully cover the screen.
  When the active scaling is non-fractional, these equations hold:
    pixel_width = width = wld_scale * configured-width-of-fullscreen-window
    pixel_height = height = wld_scale * configured-height-of-fullscreen-window
@@ -1807,40 +1862,28 @@ static int workarea_xywh[4] = { -1, -1, -1, -1 };
    pixel_width < width = wld_scale * configured-width-of-fullscreen-window
    pixel_height < height = wld_scale * configured-height-of-fullscreen-window
 
- One way for a client to discover that fractional scaling is active on a given display
- is to ask for a fullscreen window on that display, get its configured size and compare
- it to that display's pixel size. That's what function compute_full_and_maximized_areas() does.
+ One way for a client to discover that fractional scaling is active on a given screen
+ is to ask for a fullscreen window on that screen, get its configured size and compare
+ it to that screen's pixel size. That's what function compute_full_and_maximized_areas() does.
 
- One way for a client to discover the work area size of a display is to get the configured size
- of a maximized window on that display. FLTK didn't find a way to control in general
- on what display the compositor puts a maximized window. Therefore, FLTK computes an exact
- work area size only when the system contains a single display. We create first a fullscreen
- window on the display and then we create a maximized window made a child of the
- fullscreen one and record its configured size. That's also done by function
- compute_full_and_maximized_areas().
+ One way for a client to discover the work area size of a screen is to get the configured size
+ of a maximized window on that screen. We create first a fullscreen surface on each screen.
+ Then, for each screen in turn, we unset that screen's surface from fullscreen, maximize it
+ and record its configured size. That's also done by function compute_full_and_maximized_areas().
  */
 
 void Fl_Wayland_Screen_Driver::init_workarea()
 {
   wl_display_roundtrip(Fl_Wayland_Screen_Driver::wl_display); // important after screen removal
-  bool need_init_workarea = true;
   Fl_Wayland_Screen_Driver::output *output;
-  wl_list_for_each(output, &outputs, link) {
-    int Wfullscreen, Hfullscreen, Wworkarea, Hworkarea;
-    bool found_workarea = compute_full_and_maximized_areas(output, Wfullscreen, Hfullscreen, Wworkarea, Hworkarea);
-    if (Wfullscreen && Hfullscreen) { // skip sway which puts 0 there
-      output->width = Wfullscreen; // pixels
-      output->height = Hfullscreen; // pixels
-      if (found_workarea) {
-        workarea_xywh[0] = output->x; // pixels
-        workarea_xywh[1] = output->y; // pixels
-        workarea_xywh[2] = Wworkarea; // pixels
-        workarea_xywh[3] = Hworkarea; // pixels
-        need_init_workarea = false;
-      }
-    }
-  }
-  if (need_init_workarea) {
+  int Wworkarea, Hworkarea;
+  bool found_workarea = compute_full_and_maximized_areas(&output, &Wworkarea, &Hworkarea);
+  if (found_workarea) {
+    workarea_xywh[0] = output->x; // pixels
+    workarea_xywh[1] = output->y; // pixels
+    workarea_xywh[2] = Wworkarea; // pixels
+    workarea_xywh[3] = Hworkarea; // pixels
+  } else {
     wl_list_for_each(output, &outputs, link) {
       break;
     }
@@ -2274,4 +2317,11 @@ float Fl_Wayland_Screen_Driver::base_scale(int numscreen) {
 
 struct wl_display *fl_wl_display() {
   return Fl_Wayland_Screen_Driver::wl_display;
+}
+
+
+int Fl_Wayland_Screen_Driver::screen_count() {
+  if (num_screens < 0)
+    init();
+  return num_screens;
 }

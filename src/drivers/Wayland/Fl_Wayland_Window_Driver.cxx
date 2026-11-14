@@ -75,7 +75,6 @@ Fl_Window *Fl_Wayland_Window_Driver::previous_floatingtitle = NULL;
 Fl_Wayland_Window_Driver::Fl_Wayland_Window_Driver(Fl_Window *win) : Fl_Window_Driver(win)
 {
   shape_data_ = NULL;
-  standard_cursor_ = FL_CURSOR_DEFAULT;
   in_handle_configure = false;
   screen_num_ = -1;
   gl_start_support_ = NULL;
@@ -532,6 +531,7 @@ void Fl_Wayland_Window_Driver::hide() {
 #endif
       destroy_surface_caution_pointer_focus(wld_win->wl_surface, scr_driver->seat);
       wld_win->wl_surface = NULL;
+      if (scr_driver->seat->last_keydown_window == pWindow) scr_driver->seat->last_keydown_window = 0;
     }
     while (!wl_list_empty(&wld_win->outputs)) { // remove from screens where it belongs
       struct surface_output *s_output;
@@ -1755,8 +1755,8 @@ int Fl_Wayland_Window_Driver::set_cursor(Fl_Cursor c) {
       delete_cursor(xid->custom_cursor);
       xid->custom_cursor = NULL;
     }
+    current_cursor_ = c;
     if (c == FL_CURSOR_NONE) return 0;
-    standard_cursor_ = c;
     Fl_Wayland_Screen_Driver::do_set_cursor(scr_driver->seat, NULL, c);
     return 1;
   }
@@ -1808,7 +1808,7 @@ int Fl_Wayland_Window_Driver::set_cursor(Fl_Cursor c) {
     delete_cursor(xid->custom_cursor);
     xid->custom_cursor = NULL;
   }
-  standard_cursor_ = c;
+  current_cursor_ = c;
   scr_driver->set_cursor();
   return 1;
 }
@@ -1910,6 +1910,7 @@ int Fl_Wayland_Window_Driver::set_cursor(const Fl_RGB_Image *rgb, int hotx, int 
     Fl_Wayland_Screen_Driver *scr_driver = (Fl_Wayland_Screen_Driver*)Fl::screen_driver();
     struct wld_window *xid = (struct wld_window *)Fl_Window_Driver::xid(pWindow);
     Fl_Wayland_Screen_Driver::do_set_cursor(scr_driver->seat, xid->custom_cursor->wl_cursor);
+    current_cursor_ = FL_CURSOR_NONE;
   }
   return retval;
 }
@@ -2219,14 +2220,26 @@ int Fl_Wayland_Window_Driver::wld_scale() {
     int scale = 1;
     Fl_Wayland_Screen_Driver *scr_driver = (Fl_Wayland_Screen_Driver*)Fl::screen_driver();
     Fl_Wayland_Screen_Driver::output *output;
+    int ns = 0;
     wl_list_for_each(output, &(scr_driver->outputs), link) {
-      scale = fl_max(scale, output->wld_scale);
+      if (output->wld_scale > scale) {
+        scale = output->wld_scale;
+        screen_num_ = ns; // give window putative screen_num in agreement with putative scale
+      }
+      ns++;
     }
     return scale;
   }
   struct surface_output *s_output;
   s_output = wl_container_of(xid->outputs.next, s_output, link);
   return s_output->output->wld_scale;
+}
+
+
+float Fl_Wayland_Window_Driver::pixels_per_unit()
+{
+  int d = wld_scale();
+  return d * Fl::screen_driver()->scale(screen_num());
 }
 
 

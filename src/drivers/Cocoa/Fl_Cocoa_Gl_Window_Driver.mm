@@ -259,12 +259,6 @@ void Fl_Cocoa_Gl_Window_Driver::after_show() {
   }
 }
 
-float Fl_Cocoa_Gl_Window_Driver::pixels_per_unit()
-{
-  int retina = (Fl::use_high_res_GL() && Fl_X::flx(pWindow) &&
-          Fl_Cocoa_Window_Driver::driver(pWindow)->mapped_to_retina()) ? 2 : 1;
-  return retina * Fl_Graphics_Driver::default_driver().scale();
-}
 
 int Fl_Cocoa_Gl_Window_Driver::mode_(int m, const int *a) {
   if (a) { // when the mode is set using the a array of system-dependent values, and if asking for double buffer,
@@ -472,8 +466,7 @@ void Fl_Cocoa_Gl_Window_Driver::switch_back() {
 
 class Fl_Gl_Cocoa_Plugin : public Fl_Cocoa_Plugin {
 public:
-  Fl_Gl_Cocoa_Plugin() : Fl_Cocoa_Plugin(name()) { }
-  const char *name() FL_OVERRIDE { return "gl.cocoa.fltk.org"; }
+  Fl_Gl_Cocoa_Plugin() : Fl_Cocoa_Plugin("gl.cocoa.fltk.org") { }
   void resize(Fl_Gl_Window *glw, int x, int y, int w, int h) FL_OVERRIDE {
     glw->Fl_Gl_Window::resize(x, y, w, h);
   }
