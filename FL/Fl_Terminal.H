@@ -539,7 +539,7 @@ protected:
       row_     = 0;
       fgcolor_ = 0xfffff000;   // wht
       bgcolor_ = 0x00d00000;   // grn
-      style_   = 1;            // block blinking
+      style_   = 0;            // block static
       dynamic_color_ = false;  // uses bgcolor_
     }
     int col(void) const          { return col_; }

@@ -145,6 +145,7 @@ void Fl_PTY_Terminal::reset() {
   // turn on "dynamic" colors for cursor and selection
   dynamic_cursor_color(true);
   dynamic_selection_color(true);
+  set_cursor_style(1); // block blinking
 }
 
 Fl_PTY_Terminal::~Fl_PTY_Terminal() {
