@@ -729,8 +729,9 @@ void Fl_PTY_Terminal::toggle_default_colors() {
 // Catch GUI-Resize and pass it on to the Bash
 void Fl_PTY_Terminal::resize(int X, int Y, int W, int H) {
   // First let the base class change the GUI-Widget size
+  bool need_snap = w() != W || h() != H;
   Fl_Terminal::resize(X, Y, W, H);
-  if (snap_ && !window()->maximize_active()) { // 'snap to character grid' set?
+  if (snap_ && need_snap && !window()->maximize_active()) { // 'snap to character grid' set?
     Fl::remove_timeout(snap_to_grid_cb, this);
     Fl::add_timeout(0.1, snap_to_grid_cb, this);
   }
