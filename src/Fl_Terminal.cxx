@@ -3145,7 +3145,7 @@ bool Fl_Terminal::handle_private_mode(int mode, int cmd) {
       // Handle ESC[?1049h/l
       toggle_alternate_buffer(onoff); break;
     case 2004:
-      // Handle ESC[?2004/l
+      // Handle ESC[?2004h/l
       bracketed_paste_ = onoff; break;
     case 2026:
       // synchronized output mode
