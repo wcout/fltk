@@ -499,6 +499,12 @@ int Fl_PTY_Terminal::handle_dnd(int event) {
 
 // Catch Keyboard strokes
 int Fl_PTY_Terminal::handle(int event) {
+  auto backspace = [&](void) {
+    // Send backspace (use DEL instead BS, which seems better accepted)
+    char bs = '\x7f';
+    write_pty(&bs, 1);
+  };
+
   if (event == FL_KEYDOWN && pty_master_fd_ != -1) {
     int key = Fl::event_key();
     int state = Fl::event_state();
@@ -506,7 +512,7 @@ int Fl_PTY_Terminal::handle(int event) {
     int del;
     if (Fl::compose(del)) {
        if (del) {
-         write_pty("\x08", 1); // Backspace
+         backspace();
        }
        int len = Fl::event_length();
        const char *text = Fl::event_text();
@@ -524,6 +530,11 @@ int Fl_PTY_Terminal::handle(int event) {
     if (key == FL_Tab) {
       char tab_char = '\t';
       write_pty(&tab_char, 1);
+      return 1; // 1 signals to FLTK: event processed (prevents focus change)
+    }
+    // Catch Backspace key (\x08 does not always work)
+    if (key == FL_BackSpace) {
+      backspace();
       return 1; // 1 signals to FLTK: event processed (prevents focus change)
     }
 
