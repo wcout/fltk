@@ -2731,7 +2731,7 @@ void Fl_Terminal::on_cursor_blink(bool reset/*=false*/) {
   if (count) {
     cursor_state_ = !cursor_state_;
     count--;
-    redraw();
+    if (cursor_visible_ && !sync_) redraw();
   }
 }
 
