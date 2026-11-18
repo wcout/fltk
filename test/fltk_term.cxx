@@ -941,6 +941,7 @@ const std::string create_splash(Fl_PTY_Terminal &term) {
   os << pad << "Bright Colors:\n";
   os << pad << "[48;5;8m   8 [0m[48;5;9m   9 [0m[48;5;10m  10 [0m[48;5;11m  11 [0m[48;5;12m  12 [0m[48;5;13m  13 [0m[48;5;14m  14 [0m[48;5;15m  15 [0m";
   os << "\x1b[0m";
+  os << "\x1b[?2026h";  // sync on
   return os.str();
 }
 
